@@ -356,6 +356,83 @@
       font-size: 12px; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
     }
 
+    /* CHAT & TERMINE TEILEN */
+    .chat-layout {
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 780px) {
+      .chat-layout { grid-template-columns: 1fr; }
+    }
+    .friend-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .friend-row:hover { border-color: var(--accent); }
+    .friend-row.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .chat-messages-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      min-height: 290px;
+      max-height: 410px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .chat-bubble {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .chat-bubble.me {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-bubble.other {
+      align-self: flex-start;
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .chat-meta {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 4px;
+      display: block;
+    }
+    .shared-exam-card {
+      background: var(--warning-bg);
+      color: var(--text-main);
+      border: 1px solid var(--warning-border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 4px;
+    }
+
     /* LEADERBOARD STYLING */
     .leaderboard-row {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -435,7 +512,7 @@
       justify-content: space-between; gap: 14px;
     }
 
-    /* FORMULA & TRAINER (SCREENSHOT-STIL) */
+    /* FORMULA & TRAINER */
     .tab-strip {
       display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
       border-bottom: 1px solid var(--border); padding-bottom: 12px;
@@ -472,7 +549,7 @@
     .var-sym {
       font-weight: 800;
       color: #15803d;
-      width: 90px;
+      width: 110px;
     }
     [data-theme="dark"] .var-sym { color: #4ade80; }
 
@@ -689,6 +766,10 @@
         <button class="nav-item active" onclick="navigate('home', this)">
           <span class="nav-item-left">🏠 Startseite</span>
         </button>
+        <button class="nav-item" onclick="navigate('chat', this)">
+          <span class="nav-item-left">💬 Chat &amp; Termine</span>
+          <span class="count-pill" id="sidebarPendingFriendCount" style="display:none;">0</span>
+        </button>
         <button class="nav-item" onclick="navigate('leaderboard', this)">
           <span class="nav-item-left">🏆 Leaderboard</span>
         </button>
@@ -739,6 +820,9 @@
           <h2 id="pageHeading" style="font-size:20px;">🏠 Startseite</h2>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
+          <button class="calendar-pill" onclick="navigate('chat')" title="Chat & Termine öffnen">
+            <span>💬</span>
+          </button>
           <button class="calendar-pill" onclick="navigate('leaderboard')" title="Rangliste öffnen">
             <span>🏆</span>
             <span id="headerPointsBadge" style="color:var(--accent);">580</span>
@@ -786,7 +870,7 @@
     }
 
     /* ==========================================================
-       1. BENUTZER- & PRÜFUNGS-DATENBANK
+       1. BENUTZER-, FREUNDSCHAFTS-, CHAT- & PRÜFUNGS-DATENBANK
        ========================================================== */
     const defaultUsers = [
       { id: 1, name: "Gerry", email: "gerry@lernen-mit-gerry.at", role: "Admin", password: "gerry2026", mustChangePassword: false, initials: "GE", points: 580 },
@@ -798,6 +882,163 @@
     let users = JSON.parse(localStorage.getItem("lmg_users_v3")) || defaultUsers;
     function saveUsers() {
       localStorage.setItem("lmg_users_v3", JSON.stringify(users));
+    }
+
+    const defaultFriendships = [
+      { id: "fr-1", fromId: 1, toId: 2, status: "accepted" },
+      { id: "fr-2", fromId: 3, toId: 1, status: "pending" }
+    ];
+    let friendships = JSON.parse(localStorage.getItem("lmg_friendships_v1")) || defaultFriendships;
+    function saveFriendships() {
+      localStorage.setItem("lmg_friendships_v1", JSON.stringify(friendships));
+    }
+
+    const defaultChatMessages = [
+      { id: "m-1", fromId: 2, toId: 1, text: "Servus Gerry! Bist du schon durch mit Wärmebehandlung für den FET-Test?", time: "09:42", examData: null },
+      { id: "m-2", fromId: 1, toId: 2, text: "Ja fast! Ich schicke dir gleich den Prüfungstermin, damit du ihn im Kalender hast.", time: "09:45", examData: null }
+    ];
+    let chatMessages = JSON.parse(localStorage.getItem("lmg_chat_v1")) || defaultChatMessages;
+    function saveChatMessages() {
+      localStorage.setItem("lmg_chat_v1", JSON.stringify(chatMessages));
+    }
+
+    let activeChatPartnerId = null;
+
+    function getAcceptedFriends(userId) {
+      const friendIds = new Set();
+      friendships.forEach(f => {
+        if (f.status === "accepted") {
+          if (f.fromId === userId) friendIds.add(f.toId);
+          if (f.toId === userId) friendIds.add(f.fromId);
+        }
+      });
+      return users.filter(u => friendIds.has(u.id));
+    }
+
+    function getIncomingRequests(userId) {
+      return friendships.filter(f => f.status === "pending" && f.toId === userId);
+    }
+
+    function getOutgoingRequests(userId) {
+      return friendships.filter(f => f.status === "pending" && f.fromId === userId);
+    }
+
+    function sendFriendRequest(targetId) {
+      if (!targetId || targetId === currentUser.id) return;
+      const exists = friendships.find(f =>
+        (f.fromId === currentUser.id && f.toId === targetId) ||
+        (f.fromId === targetId && f.toId === currentUser.id)
+      );
+      if (exists) return;
+
+      friendships.push({
+        id: "fr-" + Date.now(),
+        fromId: currentUser.id,
+        toId: targetId,
+        status: "pending"
+      });
+      saveFriendships();
+      renderSidebar();
+      renderView();
+    }
+
+    function acceptFriendRequest(reqId) {
+      const req = friendships.find(f => f.id === reqId);
+      if (!req) return;
+      req.status = "accepted";
+      activeChatPartnerId = req.fromId === currentUser.id ? req.toId : req.fromId;
+      saveFriendships();
+      renderSidebar();
+      renderView();
+    }
+
+    function declineFriendRequest(reqId) {
+      friendships = friendships.filter(f => f.id !== reqId);
+      saveFriendships();
+      renderSidebar();
+      renderView();
+    }
+
+    function sendChatMessage() {
+      if (!activeChatPartnerId) return;
+      const input = document.getElementById("chatTextInput");
+      const txt = input ? input.value.trim() : "";
+      if (!txt) return;
+
+      const now = new Date();
+      const timeStr = now.toTimeString().slice(0, 5);
+      chatMessages.push({
+        id: "m-" + Date.now(),
+        fromId: currentUser.id,
+        toId: activeChatPartnerId,
+        text: txt,
+        time: timeStr,
+        examData: null
+      });
+      saveChatMessages();
+      renderView();
+      setTimeout(() => {
+        const box = document.getElementById("chatMessagesBox");
+        if (box) box.scrollTop = box.scrollHeight;
+      }, 20);
+    }
+
+    function shareExamInChat() {
+      if (!activeChatPartnerId) return;
+      const sel = document.getElementById("chatExamSelect");
+      const examId = sel ? sel.value : "";
+      const ex = exams.find(e => e.id === examId);
+      if (!ex) {
+        alert("Bitte wähle zuerst einen Termin aus deinem Kalender aus.");
+        return;
+      }
+
+      const now = new Date();
+      const timeStr = now.toTimeString().slice(0, 5);
+      chatMessages.push({
+        id: "m-" + Date.now(),
+        fromId: currentUser.id,
+        toId: activeChatPartnerId,
+        text: `📅 Prüfungstermin geteilt: ${ex.title}`,
+        time: timeStr,
+        examData: {
+          subject: ex.subject,
+          title: ex.title,
+          date: ex.date,
+          notes: ex.notes || ""
+        }
+      });
+      saveChatMessages();
+      renderView();
+      setTimeout(() => {
+        const box = document.getElementById("chatMessagesBox");
+        if (box) box.scrollTop = box.scrollHeight;
+      }, 20);
+    }
+
+    function adoptSharedExam(msgId) {
+      const msg = chatMessages.find(m => m.id === msgId);
+      if (!msg || !msg.examData) return;
+
+      const alreadyExists = exams.some(e =>
+        e.title === msg.examData.title && e.date === msg.examData.date
+      );
+      if (alreadyExists) {
+        alert("Dieser Prüfungstermin ist bereits in deinem Kalender gespeichert!");
+        return;
+      }
+
+      exams.push({
+        id: "ex-" + Date.now(),
+        subject: msg.examData.subject,
+        title: msg.examData.title,
+        date: msg.examData.date,
+        notes: msg.examData.notes
+      });
+      exams.sort((a, b) => a.date.localeCompare(b.date));
+      saveExams();
+      renderSidebar();
+      alert(`✅ Termin „${msg.examData.title}“ (${msg.examData.date}) wurde in deinen Prüfungskalender übernommen!`);
     }
 
     function getDefaultExams() {
@@ -1026,6 +1267,7 @@
       currentUser = userObj;
       currentView = "home";
       activeFolderId = null;
+      activeChatPartnerId = null;
       updateTopStatusBar();
       toggleLoginScreen(true);
 
@@ -1196,6 +1438,13 @@
       const upcomingExamsCount = exams.filter(e => getDaysUntil(e.date) >= 0).length;
       document.getElementById("headerCalendarCount").innerText = upcomingExamsCount;
       document.getElementById("sidebarExamCount").innerText = upcomingExamsCount;
+
+      const pendingCount = getIncomingRequests(currentUser.id).length;
+      const friendBadge = document.getElementById("sidebarPendingFriendCount");
+      if (friendBadge) {
+        friendBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
+        friendBadge.innerText = pendingCount;
+      }
 
       updateTopStatusBar();
       document.getElementById("navAdminBtn").style.display = isAdmin() ? "flex" : "none";
@@ -1499,7 +1748,7 @@
     }
 
     /* ==========================================================
-       7. FRAGEN & UNTERORDNER EINFÜGEN & LÖSEN
+       7. FRAGEN & UNTERORDNER EINFÜGEN, LÖSCHEN & LÖSEN
        ========================================================== */
     function addQuestionToFolder(subId, folderId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Fragen erstellen.");
@@ -1564,6 +1813,25 @@
       const newFolder = { id: "f-" + Date.now(), name, questions: [] };
       sub.folders.push(newFolder);
       activeFolderId = newFolder.id;
+      saveSubjects();
+      renderSidebar();
+      renderView();
+    }
+
+    function deleteFolder(subId, folderId) {
+      if (!isAdmin()) return alert("Nur Admins dürfen Unterordner löschen.");
+      const sub = subjects.find(s => s.id === subId);
+      if (!sub) return;
+      const folder = sub.folders.find(f => f.id === folderId);
+      if (!folder) return;
+
+      const confirmed = confirm(`Unterordner „${folder.name}“ (${folder.questions.length} Fragen) wirklich löschen?`);
+      if (!confirmed) return;
+
+      sub.folders = sub.folders.filter(f => f.id !== folderId);
+      if (activeFolderId === folderId) {
+        activeFolderId = sub.folders.length > 0 ? sub.folders[0].id : null;
+      }
       saveSubjects();
       renderSidebar();
       renderView();
@@ -1644,11 +1912,11 @@
             </div>
 
             <div class="card" style="margin-bottom:0; display:flex; gap:14px; align-items:flex-start;">
-              <div style="width:44px; height:44px; border-radius:12px; background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">📈</div>
+              <div style="width:44px; height:44px; border-radius:12px; background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">💬</div>
               <div>
-                <h3 style="font-size:16px; margin-bottom:4px;">Ableitungstrainer &amp; Rechner</h3>
-                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Endlos-Aufgaben für $f'(x)$ und technische Formelrechner.</p>
-                <button class="btn-secondary" onclick="navigate('derivative-trainer')">Trainer öffnen →</button>
+                <h3 style="font-size:16px; margin-bottom:4px;">Lerngruppen-Chat &amp; Termine</h3>
+                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Mit Freunden schreiben und Prüfungstermine teilen.</p>
+                <button class="btn-secondary" onclick="navigate('chat')">Chat öffnen →</button>
               </div>
             </div>
           </div>
@@ -1684,6 +1952,155 @@
                 </div>
               `;
             }).join("")}
+          </div>
+        `;
+      }
+      else if (currentView === "chat") {
+        heading.innerText = "💬 Chat & Termine";
+        const friends = getAcceptedFriends(currentUser.id);
+        const incoming = getIncomingRequests(currentUser.id);
+        const outgoing = getOutgoingRequests(currentUser.id);
+
+        if (!activeChatPartnerId && friends.length > 0) {
+          activeChatPartnerId = friends[0].id;
+        }
+        if (activeChatPartnerId && !friends.some(f => f.id === activeChatPartnerId)) {
+          activeChatPartnerId = friends.length > 0 ? friends[0].id : null;
+        }
+
+        const partner = friends.find(f => f.id === activeChatPartnerId) || null;
+        const thread = partner
+          ? chatMessages.filter(m =>
+              (m.fromId === currentUser.id && m.toId === partner.id) ||
+              (m.fromId === partner.id && m.toId === currentUser.id)
+            )
+          : [];
+
+        const relatedIds = new Set([currentUser.id]);
+        friendships.forEach(f => {
+          if (f.fromId === currentUser.id) relatedIds.add(f.toId);
+          if (f.toId === currentUser.id) relatedIds.add(f.fromId);
+        });
+        const discoverUsers = users.filter(u => !relatedIds.has(u.id));
+
+        container.innerHTML = `
+          ${incoming.length > 0 ? `
+            <div class="exam-warning-card">
+              <div class="exam-warning-top">
+                <strong>🔔 OFFENE FREUNDSCHAFTSANFRAGEN (${incoming.length})</strong>
+              </div>
+              ${incoming.map(req => {
+                const sender = users.find(u => u.id === req.fromId);
+                return `
+                  <div class="exam-item-box">
+                    <div>
+                      <strong>${sender ? sender.name : "Unbekannt"}</strong> möchte sich mit dir vernetzen, um zu chatten und Termine zu teilen.
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                      <button class="btn-primary" style="padding:6px 12px; font-size:12.5px;" onclick="acceptFriendRequest('${req.id}')">✅ Annehmen</button>
+                      <button class="btn-danger" onclick="declineFriendRequest('${req.id}')">Ablehnen</button>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          ` : ""}
+
+          <div class="chat-layout">
+            <div class="card" style="margin-bottom:0;">
+              <h4 style="margin-bottom:10px;">👥 Bestätigte Freunde (${friends.length})</h4>
+              ${friends.length === 0
+                ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Noch keine bestätigten Freunde. Sende unten eine Freundschaftsanfrage.</p>`
+                : friends.map(f => `
+                    <div class="friend-row ${f.id === activeChatPartnerId ? 'active' : ''}" onclick="activeChatPartnerId=${f.id}; renderView();">
+                      <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="avatar-circle" style="width:32px; height:32px; font-size:12px;">${f.initials}</div>
+                        <div>
+                          <div style="font-weight:700; font-size:14px;">${f.name}</div>
+                          <div style="font-size:11.5px; color:var(--text-muted);">${f.role}</div>
+                        </div>
+                      </div>
+                      <span style="font-size:12px; color:var(--accent); font-weight:700;">Chat →</span>
+                    </div>
+                  `).join("")
+              }
+
+              <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+                <h4 style="font-size:13.5px; margin-bottom:8px;">➕ Freunde hinzufügen</h4>
+                ${discoverUsers.length === 0
+                  ? `<p style="font-size:12px; color:var(--text-muted);">Alle registrierten Teilnehmer sind bereits angefragt oder befreundet.</p>`
+                  : discoverUsers.map(u => `
+                      <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:13px;">
+                        <span>${u.name}</span>
+                        <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="sendFriendRequest(${u.id})">+ Anfrage</button>
+                      </div>
+                    `).join("")
+                }
+                ${outgoing.length > 0 ? `
+                  <div style="margin-top:10px; font-size:12px; color:var(--text-muted);">
+                    ⏳ Gesendete Anfragen: ${outgoing.map(o => users.find(u => u.id === o.toId)?.name || "").join(", ")}
+                  </div>
+                ` : ""}
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:0;">
+              ${!partner
+                ? `<p style="font-size:14px; color:var(--text-muted);">Wähle links einen bestätigten Freund aus, um Nachrichten und Prüfungstermine auszutauschen.</p>`
+                : `
+                  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${partner.initials}</div>
+                      <div>
+                        <div style="font-weight:800; font-size:16px;">${partner.name}</div>
+                        <div style="font-size:12px; color:#10b981; font-weight:600;">🔒 Privater Freundes-Chat</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="chat-messages-box" id="chatMessagesBox">
+                    ${thread.length === 0
+                      ? `<div style="text-align:center; color:var(--text-muted); font-size:13px; margin:auto;">Noch keine Nachrichten. Schreib hallo oder teile einen Prüfungstermin!</div>`
+                      : thread.map(m => {
+                          const isMe = m.fromId === currentUser.id;
+                          return `
+                            <div class="chat-bubble ${isMe ? 'me' : 'other'}">
+                              <div>${m.text}</div>
+                              ${m.examData ? `
+                                <div class="shared-exam-card">
+                                  <div style="font-size:11.5px; font-weight:700; color:#b45309;">📅 ${m.examData.subject} • ${m.examData.date}</div>
+                                  <div style="font-weight:800; font-size:14px; margin:3px 0;">${m.examData.title}</div>
+                                  ${m.examData.notes ? `<div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">${m.examData.notes}</div>` : ""}
+                                  ${!isMe ? `<button class="btn-primary" style="padding:5px 10px; font-size:12px; margin-top:4px;" onclick="adoptSharedExam('${m.id}')">+ In meinen Kalender übernehmen</button>` : `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">✓ Termin gesendet</div>`}
+                                </div>
+                              ` : ""}
+                              <span class="chat-meta">${isMe ? 'Du' : partner.name} · ${m.time}</span>
+                            </div>
+                          `;
+                        }).join("")
+                    }
+                  </div>
+
+                  <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <input type="text" id="chatTextInput" class="input-field" style="margin:0;" placeholder="Nachricht an ${partner.name} schreiben..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+                    <button class="btn-primary" onclick="sendChatMessage()">Senden →</button>
+                  </div>
+
+                  <div style="background:var(--bg-input); border:1px solid var(--border); border-radius:12px; padding:12px;">
+                    <div style="font-size:12.5px; font-weight:700; margin-bottom:6px;">📅 Prüfungstermin aus deinem Kalender verschicken</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                      <select id="chatExamSelect" class="select-field" style="margin:0; flex:1; min-width:200px;">
+                        ${exams.length === 0
+                          ? `<option value="">Keine Termine im Kalender vorhanden</option>`
+                          : exams.map(ex => `<option value="${ex.id}">${ex.date} – ${ex.subject}: ${ex.title}</option>`).join("")
+                        }
+                      </select>
+                      <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="shareExamInChat()">📤 Termin senden</button>
+                    </div>
+                  </div>
+                `
+              }
+            </div>
           </div>
         `;
       }
@@ -1838,9 +2255,23 @@
                       <span class="count-pill">${cf.category}</span>
                       ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${cf.id}')">Löschen</button>` : ""}
                     </div>
-                    <h4 style="margin-top:6px;">${cf.title}</h4>
+                    <h3 style="margin-top:8px;">${cf.title}</h3>
                     <div class="formula-box">$$${cf.formula}$$</div>
-                    ${cf.description ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">${cf.description}</p>` : ""}
+                    ${cf.description ? `<h4 style="margin-bottom:4px;">Erklärung</h4><p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">${cf.description}</p>` : ""}
+                    ${Array.isArray(cf.variables) && cf.variables.length > 0 ? `
+                      <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
+                      <table class="var-table" style="margin-bottom:16px;">
+                        <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
+                        <tbody>
+                          ${cf.variables.map(v => `
+                            <tr>
+                              <td class="var-sym">$${v.symbol}$</td>
+                              <td>${v.meaning}</td>
+                            </tr>
+                          `).join("")}
+                        </tbody>
+                      </table>
+                    ` : ""}
                     <div class="form-grid-2">
                       <div><label style="font-size:12px; font-weight:600;">${cf.var1Label}</label><input type="number" id="cfv1-${cf.id}" class="input-field" value="${cf.var1Default}"></div>
                       <div><label style="font-size:12px; font-weight:600;">${cf.var2Label}</label><input type="number" id="cfv2-${cf.id}" class="input-field" value="${cf.var2Default}"></div>
@@ -1859,11 +2290,11 @@
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                 <div>
                   <strong style="font-size:14px;">🤖 KI-Code für neue Formeln einfügen (nur Admin)</strong>
-                  <div style="font-size:12px; color:var(--text-muted);">Füge den generierten Formel-Code einfach hier ein – der Rechner wird automatisch angelegt.</div>
+                  <div style="font-size:12px; color:var(--text-muted);">Füge den generierten Formel-Code inkl. Erklärung &amp; Variablen ein – das Layout wird automatisch wie bei den Formeln aufgebaut.</div>
                 </div>
                 <button class="btn-secondary" onclick="copyAiPromptForFormula()">📋 Formel-Prompt kopieren</button>
               </div>
-              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Hebelgesetz","var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}'></textarea>
+              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Das Drehmoment beschreibt die Drehbewegung um einen Drehpunkt.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}'></textarea>
               <button class="btn-primary" onclick="importAiFormulaCode()">⚡ Formel-Code direkt einfügen</button>
               <div id="aiFormulaMsg"></div>
             </div>
@@ -1908,18 +2339,22 @@
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:200px;" placeholder="Neuer Unterordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createNewFolder('${sub.id}');}">
                 <button type="button" class="btn-primary" onclick="createNewFolder('${sub.id}')">+ Ordner</button>
+                ${currentFolder ? `<button type="button" class="btn-danger" style="padding:10px 12px; font-size:13px;" onclick="deleteFolder('${sub.id}', '${currentFolder.id}')">🗑️ Ordner löschen</button>` : ""}
               </div>
               ` : ""}
             </div>
 
             <div class="tab-strip">
-              ${sub.folders.map(f => `
-                <button class="btn-secondary"
-                        style="${f.id === activeFolderId ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
-                        onclick="activeFolderId='${f.id}'; renderView();">
-                  📁 ${f.name} (${f.questions.length})
-                </button>
-              `).join("")}
+              ${sub.folders.length === 0
+                ? `<span style="font-size:13px; color:var(--text-muted);">Noch keine Unterordner vorhanden. Lege oben rechts einen neuen an.</span>`
+                : sub.folders.map(f => `
+                  <button class="btn-secondary"
+                          style="${f.id === activeFolderId ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
+                          onclick="activeFolderId='${f.id}'; renderView();">
+                    📁 ${f.name} (${f.questions.length})
+                  </button>
+                `).join("")
+              }
             </div>
 
             ${currentFolder ? `
@@ -2334,7 +2769,7 @@
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine Lernformel als reines JSON-Objekt ohne Markdown-Backticks. Format: {"title":"...","category":"...","formula":"...","description":"...","var1Label":"Wert 1","var1Default":10,"var2Label":"Wert 2","var2Default":2,"formulaType":"mul"} (formulaType: "mul", "div", "add")`;
+      const promptText = `Erstelle eine Lernformel als reines JSON-Objekt ohne Markdown-Backticks. Format: {"title":"...","category":"...","formula":"...","description":"...","variables":[{"symbol":"...","meaning":"..."}],"var1Label":"Wert 1","var1Default":10,"var2Label":"Wert 2","var2Default":2,"formulaType":"mul"} (formulaType: "mul", "div", "add")`;
       navigator.clipboard?.writeText(promptText);
       const fb = document.getElementById("aiFormulaMsg");
       if (fb) {
@@ -2366,6 +2801,12 @@
             category: String(f.category || "KI-Formel"),
             formula: String(f.formula),
             description: String(f.description || ""),
+            variables: Array.isArray(f.variables) && f.variables.length > 0
+              ? f.variables.map(v => ({ symbol: String(v.symbol || ""), meaning: String(v.meaning || "") }))
+              : [
+                  { symbol: String(f.var1Label || "Wert 1"), meaning: String(f.var1Meaning || "Erste Eingabegröße") },
+                  { symbol: String(f.var2Label || "Wert 2"), meaning: String(f.var2Meaning || "Zweite Eingabegröße") }
+                ],
             var1Label: String(f.var1Label || "Eingabe A"),
             var1Default: Number(f.var1Default ?? 10),
             var2Label: String(f.var2Label || "Eingabe B"),
