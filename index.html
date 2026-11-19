@@ -961,10 +961,10 @@
               <span id="sidebarUserName">Gerry</span>
               <span class="role-badge" id="sidebarRoleBadge">Admin</span>
             </div>
-            <div style="font-size:12px; color:var(--text-muted);">6 Tage Streak 🔥</div>
+            <div style="font-size:12px; color:var(--text-muted);" id="sidebarStreakText">0 Tage Streak 🔥</div>
           </div>
         </div>
-        <button class="points-pill" id="userPointsDisplay" onclick="navigate('leaderboard')" title="Leaderboard öffnen">580 Pkt 🏆</button>
+        <button class="points-pill" id="userPointsDisplay" onclick="navigate('leaderboard')" title="Leaderboard öffnen">0 Pkt 🏆</button>
       </div>
 
       <div>
@@ -1041,7 +1041,7 @@
           </button>
           <button class="calendar-pill" onclick="navigate('leaderboard')" title="Rangliste öffnen">
             <span>🏆</span>
-            <span id="headerPointsBadge" style="color:var(--accent);">580</span>
+            <span id="headerPointsBadge" style="color:var(--accent);">0 Pkt</span>
           </button>
           <button class="calendar-pill" onclick="navigate('calendar')" title="Prüfungskalender öffnen">
             <span>📅</span>
@@ -1081,6 +1081,114 @@
     const sbClient = (window.supabase && typeof window.supabase.createClient === "function")
       ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       : null;
+
+    // =========================================================================
+    // STREAK-KONFIGURATION & LOGIK:
+    // - Startet bei 0
+    // - Geht pro Tag nur hoch, wenn man angemeldet ist UND etwas gelernt hat
+    // - Wenn man sich einen Tag nicht anmeldet (bzw. einen Tag auslässt), geht die Streak auf 0
+    // =========================================================================
+    const STREAK_CONFIG = {
+      initialStreak: 0,
+      incrementPerDay: 1,
+      resetOnMissedDay: true
+    };
+
+    function getTodayDateString() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    function getDayDiffFromToday(dateStr) {
+      if (!dateStr) return null;
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      target.setHours(0, 0, 0, 0);
+      return Math.round((today - target) / (1000 * 60 * 60 * 24));
+    }
+
+    function normalizeUserStreak(u) {
+      if (!u) return u;
+      let streak = Number.isFinite(Number(u.streak)) ? Math.max(0, Number(u.streak)) : STREAK_CONFIG.initialStreak;
+      let lastActiveDate = u.lastActiveDate || null;
+      let learnedToday = Boolean(u.learnedToday);
+
+      const todayStr = getTodayDateString();
+      const diff = getDayDiffFromToday(lastActiveDate);
+
+      // Neuer Tag -> learnedToday zurücksetzen
+      if (lastActiveDate && lastActiveDate !== todayStr) {
+        learnedToday = false;
+      }
+
+      // Wenn mindestens 1 voller Tag ausgelassen wurde (z. B. gestern nicht eingeloggt -> diff >= 2, oder bei resetOnMissedDay diff > 1)
+      if (diff !== null && diff > 1 && STREAK_CONFIG.resetOnMissedDay) {
+        streak = 0;
+        learnedToday = false;
+      }
+
+      u.streak = streak;
+      u.lastActiveDate = lastActiveDate;
+      u.learnedToday = learnedToday;
+      return u;
+    }
+
+    function syncUserStreakOnLogin(userObj) {
+      if (!userObj) return;
+      normalizeUserStreak(userObj);
+      const todayStr = getTodayDateString();
+      const diff = getDayDiffFromToday(userObj.lastActiveDate);
+
+      // Wurde ein Tag ausgelassen (diff > 1), Streak auf 0 setzen
+      if (diff !== null && diff > 1 && STREAK_CONFIG.resetOnMissedDay) {
+        userObj.streak = 0;
+        userObj.learnedToday = false;
+      }
+
+      // Wenn es ein neuer Tag ist, darf noch nicht als heute gelernt markiert sein
+      if (userObj.lastActiveDate !== todayStr) {
+        userObj.learnedToday = false;
+      }
+
+      // Wichtig: Beim reinen Anmelden steigt die Streak NICHT automatisch;
+      // sie steigt erst, sobald heute auch gelernt wurde!
+      saveUsers();
+    }
+
+    function recordLearningActivity(pointsEarned = 10) {
+      if (!isAuthenticated || !currentUser) return { streakIncreased: false };
+      normalizeUserStreak(currentUser);
+
+      const todayStr = getTodayDateString();
+      const diff = getDayDiffFromToday(currentUser.lastActiveDate);
+
+      // Falls länger als 1 Tag Pause war, zuerst auf 0 zurücksetzen
+      if (diff !== null && diff > 1 && STREAK_CONFIG.resetOnMissedDay) {
+        currentUser.streak = 0;
+        currentUser.learnedToday = false;
+      }
+
+      let streakIncreased = false;
+      if (currentUser.lastActiveDate !== todayStr || !currentUser.learnedToday) {
+        currentUser.streak = (currentUser.streak || 0) + STREAK_CONFIG.incrementPerDay;
+        currentUser.lastActiveDate = todayStr;
+        currentUser.learnedToday = true;
+        streakIncreased = true;
+      }
+
+      currentUser.points = (currentUser.points || 0) + pointsEarned;
+      saveUsers();
+      renderSidebar();
+      return { streakIncreased };
+    }
+
+    let leaderboardTab = "points"; // "points" oder "streak"
 
     const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
     let inactivityTimerId = null;
@@ -1271,7 +1379,7 @@
           localStorage.setItem("lmg_custom_roles_v1", JSON.stringify(customRoles));
         }
         if (Array.isArray(d.users) && d.users.length) {
-          users = d.users;
+          users = d.users.map(normalizeUserStreak);
           localStorage.setItem("lmg_users_v3", JSON.stringify(users));
           const updatedMe = users.find(u => u.id === currentUser?.id);
           if (updatedMe) currentUser = updatedMe;
@@ -1655,14 +1763,15 @@
     }
 
     const defaultUsers = [
-      { id: 1, name: "Gerry", email: "gerry@lernen-mit-gerry.at", role: "Admin", password: "gerry2026", mustChangePassword: false, initials: "GE", points: 580 },
-      { id: 2, name: "Thomas M.", email: "thomas@lernen-mit-gerry.at", role: "Schüler", password: "THOMAS-START", mustChangePassword: true, initials: "TM", points: 320 },
-      { id: 3, name: "Lukas K.", email: "lukas@lernen-mit-gerry.at", role: "Schüler", password: "LUKAS-START", mustChangePassword: true, initials: "LK", points: 290 },
-      { id: 4, name: "Sarah W.", email: "sarah@lernen-mit-gerry.at", role: "Schüler", password: "sarah2026", mustChangePassword: false, initials: "SW", points: 410 }
+      { id: 1, name: "Gerry", email: "gerry@lernen-mit-gerry.at", role: "Admin", password: "gerry2026", mustChangePassword: false, initials: "GE", points: 0, streak: 0, lastActiveDate: null, learnedToday: false },
+      { id: 2, name: "Thomas M.", email: "thomas@lernen-mit-gerry.at", role: "Schüler", password: "THOMAS-START", mustChangePassword: true, initials: "TM", points: 0, streak: 0, lastActiveDate: null, learnedToday: false },
+      { id: 3, name: "Lukas K.", email: "lukas@lernen-mit-gerry.at", role: "Schüler", password: "LUKAS-START", mustChangePassword: true, initials: "LK", points: 0, streak: 0, lastActiveDate: null, learnedToday: false },
+      { id: 4, name: "Sarah W.", email: "sarah@lernen-mit-gerry.at", role: "Schüler", password: "sarah2026", mustChangePassword: false, initials: "SW", points: 0, streak: 0, lastActiveDate: null, learnedToday: false }
     ];
 
-    let users = JSON.parse(localStorage.getItem("lmg_users_v3")) || defaultUsers;
+    let users = (JSON.parse(localStorage.getItem("lmg_users_v3")) || defaultUsers).map(normalizeUserStreak);
     function saveUsers() {
+      users = users.map(normalizeUserStreak);
       localStorage.setItem("lmg_users_v3", JSON.stringify(users));
       queueCloudSync();
     }
@@ -2038,7 +2147,6 @@
       queueCloudSync();
     }
 
-    // Nur Admins dürfen neue Unterrichtsfächer anlegen oder löschen
     function openAddSubjectView() {
       if (!isAdmin()) return alert("Nur Admins dürfen Unterrichtsfächer hinzufügen.");
       navigate("admin");
@@ -2335,13 +2443,13 @@
       }
 
       let awarded = false;
+      let streakIncreased = false;
       if (isRight) {
         masteredQuestionIds.add(qId);
         saveMasteredQuestions();
         if (!prev || !prev.pointsAwarded) {
-          currentUser.points += 10;
-          saveUsers();
-          renderSidebar();
+          const res = recordLearningActivity(10);
+          streakIncreased = res.streakIncreased;
           awarded = true;
         }
       }
@@ -2355,7 +2463,11 @@
       const fb = document.getElementById("exam-fb-" + qId);
       if (fb) {
         if (isRight) {
-          fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! ${awarded ? "(+10 Pkt) " : ""}– ${explanation}</div>`;
+          const extraInfo = [
+            awarded ? "+10 Pkt" : "",
+            streakIncreased ? `Streak erhöht (${currentUser.streak} Tage 🔥)` : ""
+          ].filter(Boolean).join(" · ");
+          fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! ${extraInfo ? `(${extraInfo}) ` : ""}– ${explanation}</div>`;
         } else {
           fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expectedAnswer}) – ${explanation}</div>`;
         }
@@ -2412,7 +2524,7 @@
 
             ${activeExamSession.finished ? `
               <div class="result-banner ${pct >= 50 ? 'result-ok' : 'result-err'}" style="margin-bottom:16px; font-size:15px;">
-                🏁 Prüfung beendet: <strong>${correctCount} von ${total}</strong> Fragen richtig (<strong>${pct}%</strong>) · Aktueller Punktestand: <strong>${currentUser.points} Pkt</strong>
+                🏁 Prüfung beendet: <strong>${correctCount} von ${total}</strong> Fragen richtig (<strong>${pct}%</strong>) · Aktueller Punktestand: <strong>${currentUser.points} Pkt</strong> · Streak: <strong>${currentUser.streak} Tage 🔥</strong>
               </div>
             ` : ""}
 
@@ -2490,7 +2602,7 @@
                 Dein persönlicher Lernfortschritt: <strong>${totalMastered} / ${totalAllQ} Fragen gemeistert (${overallPct} %)</strong>
               </div>
               <div style="font-size:12.5px; color:var(--text-muted);">
-                Punktestand: <strong>${currentUser.points} Pkt</strong>
+                Punktestand: <strong>${currentUser.points} Pkt</strong> · Streak: <strong>${currentUser.streak} Tage 🔥</strong>
               </div>
             </div>
             <div class="exam-chapter-mini-grid">
@@ -2653,7 +2765,8 @@
     }
 
     function completeLoginForUser(userObj) {
-      currentUser = userObj;
+      currentUser = normalizeUserStreak(userObj);
+      syncUserStreakOnLogin(currentUser);
       isAuthenticated = true;
       currentView = "home";
       activeFolderId = null;
@@ -2727,7 +2840,7 @@
       }
       if (dot) dot.className = "dot-green";
       if (txt) {
-        txt.innerHTML = `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
+        txt.innerHTML = `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Streak: <strong>${currentUser.streak || 0}d 🔥</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
       }
     }
 
@@ -2828,7 +2941,7 @@
       const initials = (parts[0][0] + (parts[1] ? parts[1][0] : parts[0][1] || "")).toUpperCase();
       const generatedEmail = email || name.toLowerCase().replace(/[^a-z0-9]/g, "") + "@lernen-mit-gerry.at";
 
-      users.push({
+      users.push(normalizeUserStreak({
         id: Date.now(),
         name,
         email: generatedEmail,
@@ -2836,8 +2949,11 @@
         password: initPwd,
         mustChangePassword: true,
         initials,
-        points: 0
-      });
+        points: 0,
+        streak: STREAK_CONFIG.initialStreak,
+        lastActiveDate: null,
+        learnedToday: false
+      }));
 
       saveUsers();
       renderView();
@@ -2916,9 +3032,15 @@
 
     function renderSidebar() {
       if (!isAuthenticated || !currentUser) return;
+      normalizeUserStreak(currentUser);
       document.getElementById("sidebarUserName").innerText = currentUser.name;
       document.getElementById("avatarInitials").innerText = currentUser.initials;
       document.getElementById("sidebarRoleBadge").innerText = currentUser.role;
+      const streakEl = document.getElementById("sidebarStreakText");
+      if (streakEl) {
+        const sVal = currentUser.streak || 0;
+        streakEl.innerText = `${sVal} ${sVal === 1 ? "Tag" : "Tage"} Streak 🔥`;
+      }
       document.getElementById("userPointsDisplay").innerText = currentUser.points + " Pkt 🏆";
       document.getElementById("headerPointsBadge").innerText = currentUser.points + " Pkt";
 
@@ -3180,10 +3302,9 @@
       if (!userVal) return;
 
       if (userVal === correctVal) {
-        currentUser.points += 15;
-        saveUsers();
-        renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben. (${currentDerivativeTask.hintLatex})</div>`;
+        const res = recordLearningActivity(15);
+        const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
+        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben${streakMsg}. (${currentDerivativeTask.hintLatex})</div>`;
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Noch nicht ganz. Tipp: ${currentDerivativeTask.hintLatex}</div>`;
       }
@@ -3492,10 +3613,9 @@
       if (val.toLowerCase() === exp.toLowerCase()) {
         masteredQuestionIds.add(qId);
         saveMasteredQuestions();
-        currentUser.points += 10;
-        saveUsers();
-        renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt) – ${explanation}</div>`;
+        const res = recordLearningActivity(10);
+        const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${streakMsg}) – ${explanation}</div>`;
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig wäre: ${expected}) – ${explanation}</div>`;
       }
@@ -3507,14 +3627,132 @@
       if (chosen === expected) {
         masteredQuestionIds.add(qId);
         saveMasteredQuestions();
-        currentUser.points += 10;
-        saveUsers();
-        renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt) – ${explanation}</div>`;
+        const res = recordLearningActivity(10);
+        const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${streakMsg}) – ${explanation}</div>`;
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expected}) – ${explanation}</div>`;
       }
       typesetMath(fb);
+    }
+
+    function renderLeaderboardView() {
+      const normalizedUsers = users.map(normalizeUserStreak);
+      const todayStr = getTodayDateString();
+
+      if (leaderboardTab === "streak") {
+        const rankedStreak = [...normalizedUsers].sort((a, b) => (b.streak || 0) - (a.streak || 0) || (b.points || 0) - (a.points || 0));
+        const maxStreak = Math.max(...rankedStreak.map(u => u.streak || 0), 1);
+
+        return `
+          <div class="card">
+            <div class="tab-strip">
+              <button type="button" class="btn-secondary" onclick="leaderboardTab='points'; renderView();">🏆 Punkte-Leaderboard</button>
+              <button type="button" class="btn-secondary" style="border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="leaderboardTab='streak'; renderView();">🔥 Streak-Leaderboard</button>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+              <div>
+                <h3>🔥 Streak-Rangliste der Lerngruppe</h3>
+                <p style="font-size:13px; color:var(--text-muted);">
+                  Startet bei <strong>0 Tagen</strong> · Steigt pro Tag erst, wenn du angemeldet bist <strong>und</strong> gelernt hast · Bei verpasstem Tag Reset auf <strong>0</strong>.
+                </p>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="loadFromCloud(false)">🔄 Aktualisieren</button>
+                <span class="points-pill" style="cursor:default;">Deine Streak: ${currentUser.streak || 0} Tage 🔥</span>
+              </div>
+            </div>
+
+            ${rankedStreak.map((u, idx) => {
+              const rank = idx + 1;
+              const isMe = u.id === currentUser.id;
+              const rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "";
+              const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
+              const sVal = u.streak || 0;
+              const pct = Math.max(8, Math.round((sVal / maxStreak) * 100));
+              const activeToday = u.lastActiveDate === todayStr && u.learnedToday;
+
+              return `
+                <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
+                  <div style="display:flex; align-items:center; gap:12px; flex:1;">
+                    <div class="rank-badge ${rankClass}">${medal}</div>
+                    <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${u.initials}</div>
+                    <div style="flex:1;">
+                      <div style="font-weight:700; font-size:15px;">
+                        ${u.name}
+                        ${isMe ? '<span class="count-pill" style="margin-left:4px;">Du</span>' : ''}
+                        <span class="count-pill" style="margin-left:6px; font-size:11px;">
+                          ${activeToday ? "✓ Heute gelernt" : "Noch nicht heute gelernt"}
+                        </span>
+                      </div>
+                      <div style="height:6px; background:var(--border); border-radius:999px; margin-top:6px; overflow:hidden; max-width:260px;">
+                        <div style="height:100%; width:${pct}%; background:#f59e0b; border-radius:999px;"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="font-weight:800; font-size:16px; color:#d97706; white-space:nowrap;">
+                    ${sVal} ${sVal === 1 ? "Tag" : "Tage"} 🔥
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
+      }
+
+      const rankedPoints = [...normalizedUsers].sort((a, b) => (b.points || 0) - (a.points || 0) || (b.streak || 0) - (a.streak || 0));
+      const maxPoints = Math.max(...rankedPoints.map(u => u.points || 0), 1);
+
+      return `
+        <div class="card">
+          <div class="tab-strip">
+            <button type="button" class="btn-secondary" style="border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="leaderboardTab='points'; renderView();">🏆 Punkte-Leaderboard</button>
+            <button type="button" class="btn-secondary" onclick="leaderboardTab='streak'; renderView();">🔥 Streak-Leaderboard</button>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+            <div>
+              <h3>🏆 Punkte-Rangliste der Lerngruppe</h3>
+              <p style="font-size:13px; color:var(--text-muted);">Live synchronisiert über Supabase: +10 Pkt pro Frage, +15 Pkt im Ableitungstrainer.</p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="loadFromCloud(false)">🔄 Aktualisieren</button>
+              <span class="points-pill" style="cursor:default;">Dein Stand: ${currentUser.points} Pkt</span>
+            </div>
+          </div>
+
+          ${rankedPoints.map((u, idx) => {
+            const rank = idx + 1;
+            const isMe = u.id === currentUser.id;
+            const rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "";
+            const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
+            const pct = Math.max(8, Math.round(((u.points || 0) / maxPoints) * 100));
+
+            return `
+              <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
+                <div style="display:flex; align-items:center; gap:12px; flex:1;">
+                  <div class="rank-badge ${rankClass}">${medal}</div>
+                  <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${u.initials}</div>
+                  <div style="flex:1;">
+                    <div style="font-weight:700; font-size:15px;">
+                      ${u.name}
+                      ${isMe ? '<span class="count-pill" style="margin-left:4px;">Du</span>' : ''}
+                      <span class="count-pill" style="margin-left:6px; font-size:11px;">${u.streak || 0}d 🔥</span>
+                    </div>
+                    <div style="height:6px; background:var(--border); border-radius:999px; margin-top:6px; overflow:hidden; max-width:260px;">
+                      <div style="height:100%; width:${pct}%; background:var(--accent); border-radius:999px;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div style="font-weight:800; font-size:16px; color:var(--accent); white-space:nowrap;">
+                  ${u.points || 0} Pkt
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
     }
 
     function renderView() {
@@ -3785,51 +4023,7 @@
       }
       else if (currentView === "leaderboard") {
         heading.innerText = "🏆 Leaderboard";
-        const ranked = [...users].sort((a, b) => b.points - a.points);
-        const maxPoints = Math.max(...ranked.map(u => u.points), 1);
-
-        container.innerHTML = `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
-              <div>
-                <h3>Punkte-Rangliste der Lerngruppe</h3>
-                <p style="font-size:13px; color:var(--text-muted);">Live synchronisiert über Supabase: +10 Pkt pro Frage, +15 Pkt im Ableitungstrainer.</p>
-              </div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="loadFromCloud(false)">🔄 Aktualisieren</button>
-                <span class="points-pill" style="cursor:default;">Dein Stand: ${currentUser.points} Pkt</span>
-              </div>
-            </div>
-
-            ${ranked.map((u, idx) => {
-              const rank = idx + 1;
-              const isMe = u.id === currentUser.id;
-              const rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "";
-              const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
-              const pct = Math.max(8, Math.round((u.points / maxPoints) * 100));
-
-              return `
-                <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
-                  <div style="display:flex; align-items:center; gap:12px; flex:1;">
-                    <div class="rank-badge ${rankClass}">${medal}</div>
-                    <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${u.initials}</div>
-                    <div style="flex:1;">
-                      <div style="font-weight:700; font-size:15px;">
-                        ${u.name} ${isMe ? '<span class="count-pill" style="margin-left:4px;">Du</span>' : ''}
-                      </div>
-                      <div style="height:6px; background:var(--border); border-radius:999px; margin-top:6px; overflow:hidden; max-width:260px;">
-                        <div style="height:100%; width:${pct}%; background:var(--accent); border-radius:999px;"></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div style="font-weight:800; font-size:16px; color:var(--accent); white-space:nowrap;">
-                    ${u.points} Pkt
-                  </div>
-                </div>
-              `;
-            }).join("")}
-          </div>
-        `;
+        container.innerHTML = renderLeaderboardView();
       }
       else if (currentView === "calendar") {
         heading.innerText = "📅 Prüfungskalender";
@@ -4185,48 +4379,44 @@
                 <input type="text" id="newSubjectFirstFolderInput" class="input-field" placeholder="Standard: Grundlagen">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Kategorie</label>
+                <label style="font-size:13px; font-weight:600;">Icon / Emoji (optional)</label>
+                <input type="text" id="newSubjectIconInput" class="input-field" placeholder="Standard: 📘 (z. B. 🛠️, 💻, 📊)">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Bereich / Kategorie</label>
                 <select id="newSubjectCategoryInput" class="select-field">
                   <option value="TECHNIK">TECHNIK</option>
                   <option value="HAUPTFACH">HAUPTFACH</option>
                   <option value="MATURA">MATURA</option>
-                  <option value="INFORMATIK">INFORMATIK</option>
                   <option value="ALLGEMEIN">ALLGEMEIN</option>
                 </select>
               </div>
-              <div style="display:flex; gap:12px; align-items:center;">
-                <div>
-                  <label style="font-size:13px; font-weight:600;">Icon</label>
-                  <input type="text" id="newSubjectIconInput" class="input-field" style="width:76px; text-align:center;" value="📘" maxlength="4">
-                </div>
-                <div>
-                  <label style="font-size:13px; font-weight:600;">Farbe</label>
-                  <input type="color" id="newSubjectColorInput" class="input-field" style="width:62px; height:40px; padding:2px;" value="#2563eb">
-                </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Farbe</label>
+                <input type="color" id="newSubjectColorInput" value="#2563eb" style="width:48px; height:38px; border:1px solid var(--border); border-radius:8px; background:none; cursor:pointer; display:block; margin-top:6px;">
+              </div>
+              <div style="display:flex; align-items:center; padding-top:16px;">
+                <label class="user-check-label" style="margin:0;">
+                  <input type="checkbox" id="newSubjectAccessAllInput" checked>
+                  <span>Für alle Benutzer freischalten</span>
+                </label>
               </div>
             </div>
 
-            <div style="margin-bottom:14px;">
-              <label class="user-check-label" style="display:inline-flex; width:auto;">
-                <input type="checkbox" id="newSubjectAccessAllInput" checked>
-                <span>Für alle Teilnehmer sichtbar freischalten</span>
-              </label>
-            </div>
-
-            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach anlegen</button>
+            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach erstellen</button>
             <div id="newSubjectFeedback"></div>
 
-            <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-              <h4 style="margin-bottom:10px;">Vorhandene Unterrichtsfächer (${subjects.length})</h4>
+            <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+              <h4 style="font-size:14px; margin-bottom:10px;">Vorhandene Unterrichtsfächer (${subjects.length})</h4>
               ${subjects.map(s => `
-                <div class="setting-row" style="padding:10px 0;">
+                <div class="setting-row">
                   <div>
                     <strong>${s.icon} ${s.name}</strong>
                     <span class="count-pill" style="margin-left:6px;">${s.category}</span>
                     <span class="count-pill" style="margin-left:4px;">${s.folders.length} Ordner</span>
                   </div>
                   <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn-secondary" onclick="navigate('subject-${s.id}')">Öffnen</button>
+                    <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="navigate('subject-${s.id}')">Öffnen</button>
                     <button type="button" class="btn-danger" onclick="adminDeleteSubject('${s.id}')">Löschen</button>
                   </div>
                 </div>
@@ -4235,14 +4425,112 @@
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten (nur Admin)</h3>
+            <h3 style="margin-bottom:4px;">🏷️ Rollen verwalten &amp; neue Rollen erstellen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Fülle hier dein Impressum aus – es wird sofort im Menüpunkt „Impressum“ angezeigt und synchronisiert.
+              Standardrollen sind <strong>Schüler</strong>, <strong>Lehrer</strong> und <strong>Admin</strong>. Du kannst zusätzlich eigene Rollen anlegen (optional mit Admin-Rechten), umbenennen oder löschen.
             </p>
 
+            <div class="form-grid-2" style="align-items:end;">
+              <div>
+                <label style="font-size:13px; font-weight:600;">Neue Rolle anlegen</label>
+                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor, Co-Admin oder Prüfer" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
+              </div>
+              <div>
+                <label class="user-check-label" style="margin:0;">
+                  <input type="checkbox" id="adminNewRoleIsAdmin">
+                  <span>Admin-Berechtigungen für diese Rolle aktivieren</span>
+                </label>
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Rolle hinzufügen</button>
+            </div>
+
+            <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
+              ${availableRoles.map(r => `
+                <div class="setting-row">
+                  <div>
+                    <strong>${r.name}</strong>
+                    ${r.isAdminRole ? '<span class="role-badge" style="margin-left:6px;">Admin-Rechte</span>' : '<span class="count-pill" style="margin-left:6px;">Standardrechte</span>'}
+                    <span class="count-pill" style="margin-left:6px;">${users.filter(u => u.role === r.name).length} Benutzer</span>
+                  </div>
+                  ${r.builtIn ? `
+                    <span style="font-size:12px; color:var(--text-muted);">Systemrolle</span>
+                  ` : `
+                    <div style="display:flex; gap:8px;">
+                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminRenameCustomRole('${r.name.replace(/'/g, "\\'")}')">✏️ Umbenennen</button>
+                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${r.name.replace(/'/g, "\\'")}')">Löschen</button>
+                    </div>
+                  `}
+                </div>
+              `).join("")}
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:4px;">➕ Neuen Benutzer &amp; Initialpasswort anlegen</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+              Lege Namen und Initialpasswort (Invite-Code) fest. Beim ersten Login mit dem Initialpasswort wird der Benutzer automatisch aufgefordert, ein eigenes Passwort zu vergeben.
+            </p>
             <div class="form-grid-2">
               <div>
-                <label style="font-size:13px; font-weight:600;">Betreiber / Name</label>
+                <label style="font-size:13px; font-weight:600;">Name *</label>
+                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna K.">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
+                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@lernen-mit-gerry.at">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code *</label>
+                <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Rolle</label>
+                <select id="adminNewUserRole" class="select-field">
+                  ${availableRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join("")}
+                </select>
+              </div>
+            </div>
+            <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer anlegen</button>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:12px;">👥 Alle Benutzer (${users.length})</h3>
+            ${users.map(u => {
+              const normU = normalizeUserStreak(u);
+              return `
+              <div class="setting-row">
+                <div>
+                  <strong>${normU.name}</strong> <span class="role-badge">${normU.role}</span>
+                  <div style="font-size:12px; color:var(--text-muted);">
+                    ${normU.email} • ${normU.points || 0} Pkt • ${normU.streak || 0}d Streak 🔥 •
+                    ${normU.mustChangePassword
+                      ? `<span style="color:#d97706; font-weight:700;">Initialpasswort aktiv: <code>${normU.password}</code></span>`
+                      : `<span style="color:#10b981; font-weight:600;">Eigenes Passwort gesetzt</span>`
+                    }
+                  </div>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${normU.id}, this.value)">
+                    ${availableRoles.map(r => `<option value="${r.name}" ${normU.role === r.name ? 'selected' : ''}>${r.name}</option>`).join("")}
+                  </select>
+                  <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${normU.id})">🔑 Initialpasswort setzen</button>
+                  ${normU.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${normU.id})">Löschen</button>` : ""}
+                </div>
+              </div>
+            `;
+            }).join("")}
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten (nur Admin)</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+              Änderungen hier werden direkt im Impressum angezeigt und über Supabase mit allen Geräten synchronisiert.
+            </p>
+            <div class="form-grid-2">
+              <div>
+                <label style="font-size:13px; font-weight:600;">Betreiber / Projektname</label>
                 <input type="text" id="adminImpOperator" class="input-field" value="${(imprintData.operatorName || '').replace(/"/g, '&quot;')}">
               </div>
               <div>
@@ -4250,11 +4538,10 @@
                 <input type="text" id="adminImpEmail" class="input-field" value="${(imprintData.email || '').replace(/"/g, '&quot;')}">
               </div>
             </div>
-
-            <label style="font-size:13px; font-weight:600;">Anschrift / Ort</label>
+            <label style="font-size:13px; font-weight:600;">Standort / Anschrift</label>
             <input type="text" id="adminImpAddress" class="input-field" value="${(imprintData.address || '').replace(/"/g, '&quot;')}">
 
-            <label style="font-size:13px; font-weight:600;">Zweck / Beschreibung des Portals</label>
+            <label style="font-size:13px; font-weight:600;">Zweck des Angebots</label>
             <textarea id="adminImpRole" class="textarea-field">${imprintData.websiteRole || ''}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
@@ -4265,163 +4552,38 @@
 
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
               <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
-              <button type="button" class="btn-secondary" onclick="navigate('imprint')">👁️ Impressum-Ansicht öffnen</button>
+              <button type="button" class="btn-secondary" onclick="navigate('imprint')">👁️ Impressum ansehen</button>
             </div>
             <div id="adminImprintSavedMsg"></div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">🏷️ Eigene Rollen hinzufügen &amp; benennen</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Lege eigene Rollen (z. B. <em>Tutor</em>, <em>Moderator</em>, <em>Gast</em>) an, benenne sie um oder lösche sie.
-            </p>
-
-            <div class="form-grid-2" style="align-items:end;">
-              <div>
-                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle *</label>
-                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
-              </div>
-              <div>
-                <label class="user-check-label" style="margin-bottom:0; height:40px;">
-                  <input type="checkbox" id="adminNewRoleIsAdmin">
-                  <span>Volle Admin-Rechte erteilen</span>
-                </label>
-              </div>
-            </div>
-            <div style="margin-top:12px;">
-              <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Eigene Rolle speichern</button>
-            </div>
-
-            <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
-              <h4 style="font-size:13.5px; margin-bottom:10px;">Vorhandene Rollen (${availableRoles.length})</h4>
-              ${availableRoles.map(r => `
-                <div class="setting-row" style="padding:10px 0;">
-                  <div>
-                    <strong>${r.name}</strong>
-                    <span class="role-badge" style="margin-left:6px;">${r.isAdminRole ? "Admin-Rechte" : "Standard-Rechte"}</span>
-                    ${r.builtIn ? `<span class="count-pill" style="margin-left:6px;">Systemrolle</span>` : `<span class="count-pill" style="margin-left:6px;">Eigene Rolle</span>`}
-                  </div>
-                  ${!r.builtIn ? `
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                      <button type="button" class="btn-secondary" onclick="adminRenameCustomRole('${r.name.replace(/'/g, "\\'")}')">✏️ Umbenennen</button>
-                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${r.name.replace(/'/g, "\\'")}')">Löschen</button>
-                    </div>
-                  ` : ""}
-                </div>
-              `).join("")}
-            </div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-bottom:4px;">👤 Benutzer &amp; Initialpasswörter verwalten</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
-              Lege neue Teilnehmer mit Name und Initialpasswort an. Beim ersten Einloggen werden sie automatisch aufgefordert, ein eigenes Passwort zu setzen.
-            </p>
-
-            <div class="form-grid-2">
-              <div>
-                <label style="font-size:13px; font-weight:600;">Name des Benutzers *</label>
-                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Florian K.">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Initialpasswort *</label>
-                <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. FLO-2026">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">E-Mail-Adresse (optional)</label>
-                <input type="email" id="adminNewUserEmail" class="input-field" placeholder="wird sonst automatisch erstellt">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Rolle</label>
-                <select id="adminNewUserRole" class="select-field">
-                  ${availableRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join("")}
-                </select>
-              </div>
-            </div>
-            <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer mit Initialpasswort anlegen</button>
-
-            <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-              <h4 style="margin-bottom:10px;">Registrierte Teilnehmer (${users.length})</h4>
-              ${users.map(u => {
-                const userRoleOptions = availableRoles.some(r => r.name === u.role)
-                  ? availableRoles
-                  : [...availableRoles, { name: u.role, isAdminRole: false, builtIn: false }];
-
-                return `
-                <div class="setting-row">
-                  <div>
-                    <strong>${u.name}</strong> <span class="role-badge">${u.role}</span>
-                    <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
-                      Login: <code>${u.email}</code> ·
-                      ${u.mustChangePassword
-                        ? `<span style="color:#b45309; font-weight:700;">Initialpasswort aktiv: <code>${u.password}</code> (noch nicht geändert)</span>`
-                        : `<span style="color:#16a34a; font-weight:700;">Eigenes Passwort gesetzt ✓</span>`
-                      }
-                    </div>
-                  </div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <select class="select-field" style="width:auto; margin:0; padding:7px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${u.id}, this.value)">
-                      ${userRoleOptions.map(r => `<option value="${r.name}" ${u.role === r.name ? "selected" : ""}>Rolle: ${r.name}</option>`).join("")}
-                    </select>
-                    <button class="btn-secondary" onclick="adminResetUserPassword(${u.id})">🔑 Neues Initialpasswort</button>
-                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Entfernen</button>` : ""}
+            <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachberechtigungen</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lege fest, welche Benutzer Zugriff auf welches Fach haben.</p>
+            ${subjects.map(s => `
+              <div class="setting-row">
+                <div>
+                  <strong>${s.icon} ${s.name}</strong>
+                  <div style="font-size:12px; color:var(--text-muted);">
+                    ${s.accessAll ? "Alle Benutzer haben Zugriff" : "Eingeschränkt (" + s.allowedUsers.length + " Benutzer)"}
                   </div>
                 </div>
-              `;
-              }).join("")}
+                <button class="btn-secondary" onclick="openPermissionEditor('${s.id}')">Berechtigungen bearbeiten</button>
+              </div>
+            `).join("")}
+
+            <div id="permissionEditorBox" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+              <h4 id="permEditorTitle" style="margin-bottom:8px;"></h4>
+              <label class="user-check-label" style="margin-bottom:10px;">
+                <input type="checkbox" id="permAccessAllCheck" onchange="toggleAllUsersCheck(this.checked)">
+                <strong>Für ALLE Benutzer freischalten</strong>
+              </label>
+              <div class="user-checkbox-grid" id="permUsersGrid"></div>
+              <div style="margin-top:14px; display:flex; gap:10px;">
+                <button class="btn-primary" onclick="saveSubjectPermissions()">Speichern</button>
+                <button class="btn-secondary" onclick="document.getElementById('permissionEditorBox').style.display='none'">Abbrechen</button>
+              </div>
             </div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-bottom:4px;">📚 Fächer &amp; Kurse für Teilnehmer freischalten</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
-              Lege fest, ob ein Fach für <strong>alle Schüler</strong> sichtbar ist oder nur für ausgewählte Personen.
-            </p>
-
-            ${subjects.map(s => {
-              const isEditing = editingSubjectId === s.id;
-              const accessText = s.accessAll
-                ? "Alle Benutzer"
-                : (s.allowedUsers.length ? s.allowedUsers.map(id => users.find(u => u.id === id)?.name).filter(Boolean).join(", ") : "Niemand (nur Admin)");
-
-              return `
-                <div class="setting-row" style="flex-direction:column; align-items:stretch;">
-                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <div>
-                      <span class="subject-dot" style="background:${s.color}; margin-right:6px;"></span>
-                      <strong>${s.icon} ${s.name}</strong>
-                      <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Freigeschaltet für: <strong>${accessText}</strong></div>
-                    </div>
-                    <button class="btn-secondary" onclick="toggleEditSubjectAccess('${s.id}')">${isEditing ? "Schließen" : "Zugriff bearbeiten"}</button>
-                  </div>
-
-                  ${isEditing ? `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
-                      <label class="user-check-label" style="display:inline-flex; width:auto;">
-                        <input type="checkbox" id="chk-all-${s.id}" ${s.accessAll ? "checked" : ""} onchange="toggleAllUsersCheck('${s.id}', this.checked)">
-                        <strong>Für alle Benutzer freischalten</strong>
-                      </label>
-
-                      <div class="user-checkbox-grid">
-                        ${users.filter(u => u.role !== "Admin").map(u => {
-                          const checked = s.accessAll || tempSelectedUsers.has(u.id);
-                          return `
-                            <label class="user-check-label">
-                              <input type="checkbox" ${checked ? "checked" : ""} ${s.accessAll ? "disabled" : ""} onchange="toggleSingleUserCheck(${u.id}, this.checked)">
-                              <span>${u.name}</span>
-                            </label>
-                          `;
-                        }).join("")}
-                      </div>
-
-                      <div style="margin-top:12px; display:flex; gap:8px;">
-                        <button class="btn-primary" onclick="saveSubjectAccess('${s.id}')">Zugriff speichern</button>
-                      </div>
-                    </div>
-                  ` : ""}
-                </div>
-              `;
-            }).join("")}
           </div>
         `;
       }
@@ -4429,12 +4591,15 @@
       typesetMath(container);
     }
 
-    function renderQuestionBlock(q, index, canDelete, subId, folderId) {
-      const delBtn = canDelete ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>` : "";
+    function renderQuestionBlock(q, index, adminMode, subId, folderId) {
+      const delBtn = adminMode
+        ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>`
+        : "";
+
       if (q.type === "mc") {
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
               <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
               ${delBtn}
             </div>
@@ -4451,12 +4616,12 @@
       } else {
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
               <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
               ${delBtn}
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
-              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Ergebnis eingeben...">
+              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
               <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
             </div>
             <div id="fb-${q.id}"></div>
@@ -4466,54 +4631,60 @@
     }
 
     function toggleNewQuestionFields() {
-      const type = document.getElementById("newQType").value;
-      document.getElementById("mcFieldsBox").style.display = type === "mc" ? "block" : "none";
-      document.getElementById("calcFieldsBox").style.display = type === "calc" ? "block" : "none";
+      const t = document.getElementById("newQType").value;
+      document.getElementById("mcFieldsBox").style.display = t === "mc" ? "block" : "none";
+      document.getElementById("calcFieldsBox").style.display = t === "calc" ? "block" : "none";
     }
 
     function copyAiPromptForFolder(subjectName, folderName) {
-      const promptText = `Erstelle mir 5 Lernfragen für das Fach "${subjectName}" und den Unterordner "${folderName}".\nAntworte AUSSCHLIESSLICH mit einem gültigen JSON-Array ohne Markdown-Backticks in genau diesem Format:\n[\n  {\n    "type": "mc",\n    "question": "Fragetext...",\n    "options": ["Option A", "Option B", "Option C", "Option D"],\n    "correct": "Option A",\n    "explanation": "Kurze Erklärung"\n  },\n  {\n    "type": "calc",\n    "question": "Rechenfrage...",\n    "answer": "42",\n    "explanation": "Lösungsweg"\n  }\n]`;
-      navigator.clipboard?.writeText(promptText).then(() => {
-        alert("KI-Prompt kopiert! Jetzt in ChatGPT/Gemini einfügen und den JSON-Code unten wieder einsetzen.");
-      }).catch(() => {
-        prompt("Kopiere diesen Prompt:", promptText);
-      });
+      const promptText = `Erstelle 5 Lernfragen für das Fach "${subjectName}" zum Thema/Unterordner "${folderName}". Gib ausschließlich ein gültiges JSON-Array ohne Markdown-Codeblöcke (\`\`\`) zurück. Jedes Objekt soll exakt dieses Format haben:\n` +
+        `[{"type":"mc","question":"Fragetext...","options":["Option A","Option B","Option C","Option D"],"correct":"Option A","explanation":"Kurze Erklärung..."},{"type":"calc","question":"Rechenfrage...","answer":"42","explanation":"Lösungsweg..."}]`;
+
+      navigator.clipboard?.writeText(promptText).catch(() => {});
+      const msg = document.getElementById("aiImportMsg");
+      if (msg) {
+        msg.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt kopiert! Füge ihn in deine KI ein und kopiere die JSON-Antwort direkt in das Feld darüber:<br><code style="font-size:11.5px; display:block; margin-top:6px; white-space:pre-wrap;">${promptText}</code></div>`;
+      }
     }
 
     function importAiQuestionsToFolder(subId, folderId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
       const raw = document.getElementById("aiCodePasteArea").value.trim();
-      const msgBox = document.getElementById("aiImportMsg");
+      const msg = document.getElementById("aiImportMsg");
       if (!raw) return;
 
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
       try {
         const parsed = JSON.parse(cleaned);
-        const arr = Array.isArray(parsed) ? parsed : [parsed];
+        const list = Array.isArray(parsed) ? parsed : [parsed];
         const sub = subjects.find(s => s.id === subId);
         const folder = sub.folders.find(f => f.id === folderId);
         let added = 0;
 
-        arr.forEach((item, idx) => {
+        list.forEach((item, idx) => {
           if (!item || !item.question) return;
-          if (item.type === "mc" && Array.isArray(item.options) && item.options.length >= 2) {
-            folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
-              type: "mc",
-              question: String(item.question),
-              options: item.options.map(String),
-              correct: String(item.correct || item.options[0]),
-              explanation: String(item.explanation || "Automatisch importiert.")
-            });
-            added++;
-          } else if (item.answer !== undefined) {
+          if (item.type === "calc" || (!item.options && item.answer !== undefined)) {
             folder.questions.push({
               id: "q-ai-" + Date.now() + "-" + idx,
               type: "calc",
               question: String(item.question),
-              answer: String(item.answer),
-              explanation: String(item.explanation || "Automatisch importiert.")
+              answer: String(item.answer ?? ""),
+              explanation: String(item.explanation || "Keine Erklärung hinterlegt.")
+            });
+            added++;
+          } else {
+            const opts = Array.isArray(item.options) && item.options.length >= 2
+              ? item.options.map(String)
+              : ["Antwort A", "Antwort B"];
+            const correct = item.correct && opts.includes(String(item.correct)) ? String(item.correct) : opts[0];
+            folder.questions.push({
+              id: "q-ai-" + Date.now() + "-" + idx,
+              type: "mc",
+              question: String(item.question),
+              options: opts,
+              correct,
+              explanation: String(item.explanation || "Keine Erklärung hinterlegt.")
             });
             added++;
           }
@@ -4522,74 +4693,84 @@
         saveSubjects();
         renderSidebar();
         renderView();
-        document.getElementById("aiImportMsg").innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
-      } catch (e) {
-        msgBox.innerHTML = `<div class="result-banner result-err">❌ Ungültiges JSON-Format. Bitte prüfe den eingefügten Code.</div>`;
+        const afterMsg = document.getElementById("aiImportMsg");
+        if (afterMsg) {
+          afterMsg.innerHTML = `<div class="result-banner result-ok">⚡ ${added} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
+        }
+      } catch (err) {
+        if (msg) {
+          msg.innerHTML = `<div class="result-banner result-err">❌ Code konnte nicht gelesen werden. Bitte gültigen JSON-Code einfügen (${err.message}).</div>`;
+        }
       }
     }
 
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
+    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1") || "[]");
     function saveCustomFormulas() {
       localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
       queueCloudSync();
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle mir eine Lernformel inklusive Erklärung und Variablentabelle.\nAntworte AUSSCHLIESSLICH mit gültigem JSON ohne Markdown-Backticks in genau diesem Format:\n{\n  "title": "Name der Formel",\n  "category": "Fachbereich",\n  "formula": "F = m \\\\cdot a",\n  "description": "Kurze, klare Erklärung wofür die Formel verwendet wird.",\n  "variables": [\n    { "symbol": "F", "meaning": "Kraft in Newton (N)" },\n    { "symbol": "m", "meaning": "Masse in Kilogramm (kg)" },\n    { "symbol": "a", "meaning": "Beschleunigung in m/s²" }\n  ],\n  "var1Label": "Masse m [kg]",\n  "var1Default": 10,\n  "var2Label": "Beschleunigung a [m/s²]",\n  "var2Default": 9.81,\n  "formulaType": "mul"\n}\n(formulaType kann "mul", "div" oder "add" sein)`;
-      navigator.clipboard?.writeText(promptText).then(() => {
-        alert("Formel-Prompt kopiert!");
-      }).catch(() => {
-        prompt("Kopiere diesen Prompt:", promptText);
-      });
+      const promptText = `Erstelle eine Formel mit Berechnung für das Lernportal. Gib ausschließlich ein gültiges JSON-Objekt ohne Markdown-Codeblöcke (\`\`\`) zurück. Format:\n` +
+        `{"title":"Titel der Formel","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Kurze Erklärung der Formel und Anwendung.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Variable 1 [Einheit]","var1Default":10,"var2Label":"Variable 2 [Einheit]","var2Default":5,"formulaType":"mul","unit":"Nm"}`;
+      navigator.clipboard?.writeText(promptText).catch(() => {});
+      const msg = document.getElementById("aiFormulaMsg");
+      if (msg) {
+        msg.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt kopiert! Füge ihn in deine KI ein und kopiere das Ergebnis in das Feld darüber.</div>`;
+      }
     }
 
     function importAiFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln importieren.");
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln hinzufügen.");
       const raw = document.getElementById("aiFormulaCodeArea").value.trim();
-      const msgBox = document.getElementById("aiFormulaMsg");
+      const msg = document.getElementById("aiFormulaMsg");
       if (!raw) return;
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
       try {
         const parsed = JSON.parse(cleaned);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
-        let count = 0;
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        let added = 0;
 
-        list.forEach((item, idx) => {
-          if (!item || !item.title || !item.formula) return;
-          const cleanVars = Array.isArray(item.variables)
-            ? item.variables
+        items.forEach((obj, idx) => {
+          if (!obj || !obj.title || !obj.formula) return;
+          const v1Def = Number(obj.var1Default ?? 10);
+          const v2Def = Number(obj.var2Default ?? 5);
+          const vars = Array.isArray(obj.variables)
+            ? obj.variables
                 .filter(v => v && v.symbol && v.meaning)
                 .map(v => ({ symbol: String(v.symbol), meaning: String(v.meaning) }))
             : [];
 
           customFormulas.push({
             id: "cf-" + Date.now() + "-" + idx,
-            title: String(item.title),
-            category: String(item.category || "Allgemein"),
-            formula: String(item.formula),
-            description: String(item.description || ""),
-            variables: cleanVars,
-            var1Label: String(item.var1Label || "Wert 1"),
-            var1Default: Number(item.var1Default ?? 10),
-            var2Label: String(item.var2Label || "Wert 2"),
-            var2Default: Number(item.var2Default ?? 2),
-            formulaType: String(item.formulaType || "mul")
+            title: String(obj.title),
+            category: String(obj.category || "Allgemein"),
+            formula: String(obj.formula),
+            description: String(obj.description || ""),
+            variables: vars,
+            var1Label: String(obj.var1Label || "Wert 1"),
+            var1Default: isNaN(v1Def) ? 10 : v1Def,
+            var2Label: String(obj.var2Label || "Wert 2"),
+            var2Default: isNaN(v2Def) ? 5 : v2Def,
+            formulaType: String(obj.formulaType || "mul"),
+            unit: String(obj.unit || "")
           });
-          count++;
+          added++;
         });
 
         saveCustomFormulas();
         renderSidebar();
         activeCalcTab = "ai-custom";
-        activeFormulaCategoryFilter = "ALL";
         renderView();
-        setTimeout(() => {
-          const targetMsg = document.getElementById("aiFormulaMsg");
-          if (targetMsg) targetMsg.innerHTML = `<div class="result-banner result-ok">✅ ${count} Formel(n) eingefügt!</div>`;
-        }, 30);
-      } catch (e) {
-        msgBox.innerHTML = `<div class="result-banner result-err">❌ Code konnte nicht gelesen werden. Bitte JSON prüfen.</div>`;
+        const afterMsg = document.getElementById("aiFormulaMsg");
+        if (afterMsg) {
+          afterMsg.innerHTML = `<div class="result-banner result-ok">⚡ ${added} Formel(n) erfolgreich hinzugefügt!</div>`;
+        }
+      } catch (err) {
+        if (msg) {
+          msg.innerHTML = `<div class="result-banner result-err">❌ Ungültiger Formel-Code (${err.message}).</div>`;
+        }
       }
     }
 
@@ -4601,48 +4782,63 @@
       if (isNaN(v1) || isNaN(v2)) return;
 
       let res = 0;
-      if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : NaN;
-      else if (cf.formulaType === "add") res = v1 + v2;
+      if (cf.formulaType === "add") res = v1 + v2;
+      else if (cf.formulaType === "sub") res = v1 - v2;
+      else if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : 0;
       else res = v1 * v2;
 
-      document.getElementById("cfres-" + cfId).innerHTML = `<div class="result-banner result-ok">Ergebnis: ${isNaN(res) ? "Division durch 0" : res.toFixed(3)}</div>`;
+      const box = document.getElementById("cfres-" + cfId);
+      box.innerHTML = `<div class="result-banner result-ok">Ergebnis: <strong>${Number.isInteger(res) ? res : res.toFixed(3)}</strong> ${cf.unit}</div>`;
     }
 
     function deleteCustomFormula(cfId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
+      if (!isAdmin()) return;
       customFormulas = customFormulas.filter(f => f.id !== cfId);
       saveCustomFormulas();
       renderSidebar();
       renderView();
     }
 
-    function toggleEditSubjectAccess(subId) {
-      if (editingSubjectId === subId) {
-        editingSubjectId = null;
-      } else {
-        editingSubjectId = subId;
-        const sub = subjects.find(s => s.id === subId);
-        tempSelectedUsers = new Set(sub.allowedUsers || []);
-      }
-      renderView();
-    }
-
-    function toggleAllUsersCheck(subId, isChecked) {
+    function openPermissionEditor(subId) {
+      if (!isAdmin()) return;
       const sub = subjects.find(s => s.id === subId);
-      sub.accessAll = isChecked;
-      renderView();
+      if (!sub) return;
+      editingSubjectId = subId;
+      tempSelectedUsers = new Set(sub.allowedUsers || []);
+
+      document.getElementById("permissionEditorBox").style.display = "block";
+      document.getElementById("permEditorTitle").innerText = `Zugriff für „${sub.name}“ festlegen`;
+      document.getElementById("permAccessAllCheck").checked = Boolean(sub.accessAll);
+
+      document.getElementById("permUsersGrid").innerHTML = users.map(u => `
+        <label class="user-check-label">
+          <input type="checkbox" ${sub.accessAll || tempSelectedUsers.has(u.id) ? "checked" : ""}
+                 ${sub.accessAll ? "disabled" : ""}
+                 onchange="toggleUserPerm(${u.id}, this.checked)">
+          <span>${u.name} (${u.role})</span>
+        </label>
+      `).join("");
     }
 
-    function toggleSingleUserCheck(userId, isChecked) {
-      if (isChecked) tempSelectedUsers.add(userId);
+    function toggleAllUsersCheck(checked) {
+      document.querySelectorAll("#permUsersGrid input[type='checkbox']").forEach(cb => {
+        cb.disabled = checked;
+        if (checked) cb.checked = true;
+      });
+    }
+
+    function toggleUserPerm(userId, checked) {
+      if (checked) tempSelectedUsers.add(userId);
       else tempSelectedUsers.delete(userId);
     }
 
-    function saveSubjectAccess(subId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Zugriffsrechte ändern.");
-      const sub = subjects.find(s => s.id === subId);
-      sub.allowedUsers = Array.from(tempSelectedUsers);
-      editingSubjectId = null;
+    function saveSubjectPermissions() {
+      if (!isAdmin() || !editingSubjectId) return;
+      const sub = subjects.find(s => s.id === editingSubjectId);
+      if (!sub) return;
+      const allChecked = document.getElementById("permAccessAllCheck").checked;
+      sub.accessAll = allChecked;
+      sub.allowedUsers = allChecked ? [] : Array.from(tempSelectedUsers);
       saveSubjects();
       renderSidebar();
       renderView();
