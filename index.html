@@ -1047,6 +1047,7 @@
         try {
           const payload = {
             users,
+            customRoles,
             subjects,
             exams,
             friendships,
@@ -1086,6 +1087,10 @@
         const d = data.data;
         isApplyingCloudState = true;
 
+        if (Array.isArray(d.customRoles)) {
+          customRoles = d.customRoles;
+          localStorage.setItem("lmg_custom_roles_v1", JSON.stringify(customRoles));
+        }
         if (Array.isArray(d.users) && d.users.length) {
           users = d.users;
           localStorage.setItem("lmg_users_v3", JSON.stringify(users));
@@ -1175,6 +1180,27 @@
       if (topBtn) topBtn.style.display = showBack ? "inline-flex" : "none";
       if (mainBtn) mainBtn.style.display = showBack ? "inline-flex" : "none";
       if (logoutBtn) logoutBtn.style.display = isAuthenticated ? "inline-flex" : "none";
+    }
+
+    let customRoles = JSON.parse(localStorage.getItem("lmg_custom_roles_v1")) || [];
+    function saveCustomRoles() {
+      localStorage.setItem("lmg_custom_roles_v1", JSON.stringify(customRoles));
+      queueCloudSync();
+    }
+
+    function getAllAvailableRoles() {
+      const base = [
+        { name: "Schüler", isAdminRole: false, builtIn: true },
+        { name: "Admin", isAdminRole: true, builtIn: true }
+      ];
+      const extras = customRoles
+        .filter(r => r && r.name && !["schüler", "admin"].includes(String(r.name).trim().toLowerCase()))
+        .map(r => ({
+          name: String(r.name).trim(),
+          isAdminRole: Boolean(r.isAdminRole),
+          builtIn: false
+        }));
+      return [...base, ...extras];
     }
 
     const defaultUsers = [
@@ -2150,12 +2176,93 @@
       }
     }
 
+    function adminCreateCustomRole() {
+      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
+      const nameInput = document.getElementById("adminNewRoleName");
+      const adminCheck = document.getElementById("adminNewRoleIsAdmin");
+      const cleanName = nameInput ? nameInput.value.trim() : "";
+      const grantAdmin = Boolean(adminCheck && adminCheck.checked);
+
+      if (!cleanName) {
+        alert("Bitte zuerst einen Namen für die neue Rolle eingeben!");
+        nameInput?.focus();
+        return;
+      }
+
+      if (["schüler", "admin"].includes(cleanName.toLowerCase())) {
+        alert("„Schüler“ und „Admin“ sind bereits als Standardrollen vorhanden.");
+        return;
+      }
+
+      const existing = customRoles.find(r => String(r.name).toLowerCase() === cleanName.toLowerCase());
+      if (existing) {
+        existing.name = cleanName;
+        existing.isAdminRole = grantAdmin;
+      } else {
+        customRoles.push({ name: cleanName, isAdminRole: grantAdmin });
+      }
+
+      saveCustomRoles();
+      renderView();
+    }
+
+    function adminRenameCustomRole(oldRoleName) {
+      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
+      const roleObj = customRoles.find(r => r.name === oldRoleName);
+      if (!roleObj) return;
+
+      const updated = prompt(`Neuen Namen für die Rolle „${oldRoleName}“ eingeben:`, oldRoleName);
+      if (!updated) return;
+      const cleanName = updated.trim();
+      if (!cleanName) return;
+
+      if (["schüler", "admin"].includes(cleanName.toLowerCase())) {
+        alert("Dieser Name ist für Standardrollen reserviert.");
+        return;
+      }
+
+      const duplicate = customRoles.find(r => r !== roleObj && String(r.name).toLowerCase() === cleanName.toLowerCase());
+      if (duplicate) {
+        alert("Eine Rolle mit diesem Namen existiert bereits.");
+        return;
+      }
+
+      roleObj.name = cleanName;
+      users.forEach(u => {
+        if (u.role === oldRoleName) {
+          u.role = cleanName;
+        }
+      });
+
+      saveCustomRoles();
+      saveUsers();
+      renderSidebar();
+      renderView();
+    }
+
+    function adminDeleteCustomRole(roleName) {
+      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
+      if (!confirm(`Eigene Rolle „${roleName}“ löschen? Benutzer mit dieser Rolle werden auf „Schüler“ gesetzt.`)) return;
+
+      customRoles = customRoles.filter(r => r.name !== roleName);
+      users.forEach(u => {
+        if (u.role === roleName) {
+          u.role = "Schüler";
+        }
+      });
+
+      saveCustomRoles();
+      saveUsers();
+      renderSidebar();
+      renderView();
+    }
+
     function adminCreateUser() {
       if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
       const name = document.getElementById("adminNewUserName").value.trim();
       const email = document.getElementById("adminNewUserEmail").value.trim();
       const initPwd = document.getElementById("adminNewUserInitPwd").value.trim();
-      const role = document.getElementById("adminNewUserRole").value;
+      const role = document.getElementById("adminNewUserRole").value || "Schüler";
 
       if (!name || !initPwd) {
         alert("Bitte Name und Initialpasswort ausfüllen!");
@@ -2194,12 +2301,21 @@
       renderView();
     }
 
-    function adminToggleUserRole(userId) {
+    function adminChangeUserRole(userId, newRole) {
       if (!isAdmin()) return;
       const target = users.find(u => u.id === userId);
-      if (!target || target.id === currentUser.id) return;
-      target.role = target.role === "Admin" ? "Schüler" : "Admin";
+      if (!target || !newRole) return;
+      if (target.id === currentUser.id && newRole.toLowerCase() !== "admin") {
+        const customAdmin = customRoles.find(r => r.name === newRole && r.isAdminRole);
+        if (!customAdmin) {
+          alert("Du kannst dir als aktuell eingeloggter Admin nicht selbst die Admin-Rechte entziehen.");
+          renderView();
+          return;
+        }
+      }
+      target.role = newRole;
       saveUsers();
+      renderSidebar();
       renderView();
     }
 
@@ -2231,7 +2347,11 @@
     })();
 
     function isAdmin() {
-      return isAuthenticated && currentUser && String(currentUser.role).trim().toLowerCase() === "admin";
+      if (!isAuthenticated || !currentUser) return false;
+      const roleStr = String(currentUser.role).trim().toLowerCase();
+      if (roleStr === "admin") return true;
+      const matchedCustom = customRoles.find(r => String(r.name).trim().toLowerCase() === roleStr);
+      return Boolean(matchedCustom && matchedCustom.isAdminRole);
     }
 
     function getVisibleSubjects() {
@@ -3463,7 +3583,51 @@
           return;
         }
         heading.innerText = "🛡️ Admin: Benutzer & Kurse";
+        const availableRoles = getAllAvailableRoles();
+
         container.innerHTML = `
+          <div class="card">
+            <h3 style="margin-bottom:4px;">🏷️ Eigene Rollen hinzufügen &amp; benennen</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+              Lege eigene Rollen (z. B. <em>Tutor</em>, <em>Moderator</em>, <em>Gast</em>) an, benenne sie um oder lösche sie.
+            </p>
+
+            <div class="form-grid-2" style="align-items:end;">
+              <div>
+                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle *</label>
+                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
+              </div>
+              <div>
+                <label class="user-check-label" style="margin-bottom:0; height:40px;">
+                  <input type="checkbox" id="adminNewRoleIsAdmin">
+                  <span>Volle Admin-Rechte erteilen</span>
+                </label>
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Eigene Rolle speichern</button>
+            </div>
+
+            <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+              <h4 style="font-size:13.5px; margin-bottom:10px;">Vorhandene Rollen (${availableRoles.length})</h4>
+              ${availableRoles.map(r => `
+                <div class="setting-row" style="padding:10px 0;">
+                  <div>
+                    <strong>${r.name}</strong>
+                    <span class="role-badge" style="margin-left:6px;">${r.isAdminRole ? "Admin-Rechte" : "Standard-Rechte"}</span>
+                    ${r.builtIn ? `<span class="count-pill" style="margin-left:6px;">Systemrolle</span>` : `<span class="count-pill" style="margin-left:6px;">Eigene Rolle</span>`}
+                  </div>
+                  ${!r.builtIn ? `
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                      <button type="button" class="btn-secondary" onclick="adminRenameCustomRole('${r.name.replace(/'/g, "\\'")}')">✏️ Umbenennen</button>
+                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${r.name.replace(/'/g, "\\'")}')">Löschen</button>
+                    </div>
+                  ` : ""}
+                </div>
+              `).join("")}
+            </div>
+          </div>
+
           <div class="card">
             <h3 style="margin-bottom:4px;">👤 Benutzer &amp; Initialpasswörter verwalten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
@@ -3486,8 +3650,7 @@
               <div>
                 <label style="font-size:13px; font-weight:600;">Rolle</label>
                 <select id="adminNewUserRole" class="select-field">
-                  <option value="Schüler">Schüler</option>
-                  <option value="Admin">Admin</option>
+                  ${availableRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join("")}
                 </select>
               </div>
             </div>
@@ -3495,7 +3658,12 @@
 
             <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
               <h4 style="margin-bottom:10px;">Registrierte Teilnehmer (${users.length})</h4>
-              ${users.map(u => `
+              ${users.map(u => {
+                const userRoleOptions = availableRoles.some(r => r.name === u.role)
+                  ? availableRoles
+                  : [...availableRoles, { name: u.role, isAdminRole: false, builtIn: false }];
+
+                return `
                 <div class="setting-row">
                   <div>
                     <strong>${u.name}</strong> <span class="role-badge">${u.role}</span>
@@ -3507,13 +3675,16 @@
                       }
                     </div>
                   </div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    ${u.id !== currentUser.id ? `<button class="btn-secondary" onclick="adminToggleUserRole(${u.id})">${u.role === 'Admin' ? '⬇️ Admin entziehen' : '🛡️ Zum Admin machen'}</button>` : ""}
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <select class="select-field" style="width:auto; margin:0; padding:7px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${u.id}, this.value)">
+                      ${userRoleOptions.map(r => `<option value="${r.name}" ${u.role === r.name ? "selected" : ""}>Rolle: ${r.name}</option>`).join("")}
+                    </select>
                     <button class="btn-secondary" onclick="adminResetUserPassword(${u.id})">🔑 Neues Initialpasswort</button>
                     ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Entfernen</button>` : ""}
                   </div>
                 </div>
-              `).join("")}
+              `;
+              }).join("")}
             </div>
           </div>
 
