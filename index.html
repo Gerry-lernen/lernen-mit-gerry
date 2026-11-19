@@ -92,6 +92,12 @@
       gap: 8px;
       width: 100%;
     }
+    .top-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .status-indicator { display: flex; align-items: center; gap: 8px; }
     .dot-green { width: 9px; height: 9px; border-radius: 50%; background: #10b981; display: inline-block; flex-shrink: 0; }
     .invite-pill-btn {
@@ -109,6 +115,14 @@
       transition: border-color 0.15s, background 0.15s;
     }
     .invite-pill-btn:hover { border-color: var(--accent); background: #263349; }
+    .invite-pill-btn.home-pill {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .invite-pill-btn.home-pill:hover {
+      background: var(--accent-hover);
+    }
 
     /* ==========================================================
        LOGIN / INVITE SCREEN
@@ -315,7 +329,7 @@
     .nav-item.active .count-pill { background: var(--accent); color: #fff; }
 
     .main-area { flex: 1; padding: 20px; max-width: 1040px; margin: 0 auto; width: 100%; }
-    .mobile-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .mobile-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
     .mobile-header-left { display: flex; align-items: center; gap: 12px; }
     .hamburger-btn {
       background: var(--accent); color: #fff; border: none;
@@ -675,9 +689,14 @@
         <span class="dot-green"></span>
         <span id="statusUserText">Aktiv als <strong>Gerry (Admin)</strong> • Desktop &amp; Smartphone optimiert</span>
       </div>
-      <button class="invite-pill-btn" id="topToggleScreenBtn" onclick="toggleLoginScreen()">
-        ← Zurück zur Plattform
-      </button>
+      <div class="top-actions-right">
+        <button class="invite-pill-btn home-pill" id="topBackHomeBtn" style="display:none;" onclick="goToStartseite()">
+          🏠 Zurück zur Startseite
+        </button>
+        <button class="invite-pill-btn" id="topToggleScreenBtn" onclick="toggleLoginScreen()">
+          ← Zurück zur Plattform
+        </button>
+      </div>
     </div>
   </div>
 
@@ -819,7 +838,10 @@
           <button class="hamburger-btn" onclick="toggleSidebar(true)">☰</button>
           <h2 id="pageHeading" style="font-size:20px;">🏠 Startseite</h2>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <button class="btn-secondary" id="mainBackHomeBtn" style="display:none; padding:7px 12px; font-size:12.5px;" onclick="goToStartseite()">
+            🏠 Startseite
+          </button>
           <button class="calendar-pill" onclick="navigate('chat')" title="Chat & Termine öffnen">
             <span>💬</span>
           </button>
@@ -867,6 +889,19 @@
         const targets = el ? [el] : undefined;
         window.MathJax.typesetPromise(targets).catch(() => {});
       }
+    }
+
+    function goToStartseite() {
+      toggleLoginScreen(true);
+      navigate("home");
+    }
+
+    function syncBackHomeButtons() {
+      const showBack = !isLoginScreenVisible && currentView !== "home";
+      const topBtn = document.getElementById("topBackHomeBtn");
+      const mainBtn = document.getElementById("mainBackHomeBtn");
+      if (topBtn) topBtn.style.display = showBack ? "inline-flex" : "none";
+      if (mainBtn) mainBtn.style.display = showBack ? "inline-flex" : "none";
     }
 
     /* ==========================================================
@@ -1221,6 +1256,8 @@
         ? "← Zurück zur Plattform"
         : "🔒 Startbildschirm / Login";
 
+      syncBackHomeButtons();
+
       if (!isLoginScreenVisible) {
         renderSidebar();
         renderView();
@@ -1478,6 +1515,7 @@
       document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
       if (btnEl) btnEl.classList.add("active");
       toggleSidebar(false);
+      syncBackHomeButtons();
       renderView();
     }
 
@@ -1869,6 +1907,7 @@
        8. ANSICHTEN RENDERN
        ========================================================== */
     function renderView() {
+      syncBackHomeButtons();
       const container = document.getElementById("viewContainer");
       const heading = document.getElementById("pageHeading");
       const visible = getVisibleSubjects();
@@ -2858,6 +2897,7 @@
 
     // Initiales Rendering
     updateTopStatusBar();
+    syncBackHomeButtons();
     typesetMath();
   </script>
 </body>
