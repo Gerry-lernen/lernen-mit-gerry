@@ -2038,6 +2038,110 @@
       queueCloudSync();
     }
 
+    // Nur Admins dürfen neue Unterrichtsfächer anlegen oder löschen
+    function openAddSubjectView() {
+      if (!isAdmin()) return alert("Nur Admins dürfen Unterrichtsfächer hinzufügen.");
+      navigate("admin");
+      setTimeout(() => {
+        const nameInput = document.getElementById("newSubjectNameInput");
+        if (nameInput) {
+          nameInput.scrollIntoView({ behavior: "smooth", block: "center" });
+          nameInput.focus();
+        }
+      }, 80);
+    }
+
+    function adminCreateSubject() {
+      if (!isAdmin()) return alert("Nur Admins dürfen Unterrichtsfächer hinzufügen.");
+
+      const nameEl = document.getElementById("newSubjectNameInput");
+      const iconEl = document.getElementById("newSubjectIconInput");
+      const catEl = document.getElementById("newSubjectCategoryInput");
+      const folderEl = document.getElementById("newSubjectFirstFolderInput");
+      const colorEl = document.getElementById("newSubjectColorInput");
+      const accessAllEl = document.getElementById("newSubjectAccessAllInput");
+      const fbEl = document.getElementById("newSubjectFeedback");
+
+      const cleanName = nameEl ? nameEl.value.trim() : "";
+      if (!cleanName) {
+        if (fbEl) {
+          fbEl.innerHTML = `<div class="result-banner result-err">❌ Bitte gib zuerst einen Namen für das Unterrichtsfach ein.</div>`;
+        } else {
+          alert("Bitte gib zuerst einen Namen für das Unterrichtsfach ein.");
+        }
+        nameEl?.focus();
+        return;
+      }
+
+      const duplicate = subjects.find(s => String(s.name).trim().toLowerCase() === cleanName.toLowerCase());
+      if (duplicate) {
+        if (fbEl) {
+          fbEl.innerHTML = `<div class="result-banner result-err">❌ Ein Fach mit dem Namen „${cleanName}“ existiert bereits.</div>`;
+        }
+        return;
+      }
+
+      const cleanIcon = (iconEl && iconEl.value.trim()) ? iconEl.value.trim() : "📘";
+      const cleanCat = (catEl && catEl.value.trim()) ? catEl.value.trim() : "TECHNIK";
+      const cleanColor = (colorEl && colorEl.value) ? colorEl.value : "#2563eb";
+      const accessAll = accessAllEl ? Boolean(accessAllEl.checked) : true;
+      const firstFolderName = (folderEl && folderEl.value.trim()) ? folderEl.value.trim() : "Grundlagen";
+
+      const slugBase = cleanName
+        .toLowerCase()
+        .replace(/ä/g, "ae")
+        .replace(/ö/g, "oe")
+        .replace(/ü/g, "ue")
+        .replace(/ß/g, "ss")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
+      const uniqueId = (slugBase || "fach") + "-" + Date.now().toString().slice(-4);
+
+      const newSubject = {
+        id: uniqueId,
+        name: cleanName,
+        icon: cleanIcon,
+        category: cleanCat,
+        color: cleanColor,
+        favorite: false,
+        accessAll: accessAll,
+        allowedUsers: accessAll ? [] : [currentUser.id],
+        folders: [
+          {
+            id: "f-" + Date.now(),
+            name: firstFolderName,
+            questions: []
+          }
+        ]
+      };
+
+      subjects.push(newSubject);
+      saveSubjects();
+      renderSidebar();
+      renderView();
+
+      const afterFb = document.getElementById("newSubjectFeedback");
+      if (afterFb) {
+        afterFb.innerHTML = `<div class="result-banner result-ok">✅ Unterrichtsfach „${cleanName}“ wurde angelegt (inkl. Ordner „${firstFolderName}“).</div>`;
+      }
+    }
+
+    function adminDeleteSubject(subId) {
+      if (!isAdmin()) return alert("Nur Admins dürfen Unterrichtsfächer löschen.");
+      const sub = subjects.find(s => s.id === subId);
+      if (!sub) return;
+      if (!confirm(`Unterrichtsfach „${sub.name}“ wirklich komplett löschen?`)) return;
+
+      subjects = subjects.filter(s => s.id !== subId);
+      if (currentView === "subject-" + subId) {
+        currentView = "home";
+      }
+      saveSubjects();
+      renderSidebar();
+      renderView();
+    }
+
     let currentUser = users[0];
     let isLoginScreenVisible = true;
     let currentView = "home";
@@ -2849,7 +2953,16 @@
       document.getElementById("navAdminBtn").style.display = isAdmin() ? "flex" : "none";
 
       const visible = getVisibleSubjects();
-      document.getElementById("sidebarSubjects").innerHTML = visible.map(sub => `
+      const addSubjectBtnHtml = isAdmin() ? `
+        <button type="button"
+                class="btn-secondary"
+                style="width:100%; margin-bottom:8px; padding:7px 10px; font-size:12.5px; font-weight:700; border-style:dashed;"
+                onclick="openAddSubjectView()">
+          ➕ Neues Fach hinzufügen
+        </button>
+      ` : "";
+
+      document.getElementById("sidebarSubjects").innerHTML = addSubjectBtnHtml + visible.map(sub => `
         <div class="nav-item ${currentView === 'subject-' + sub.id ? 'active' : ''}"
              style="padding-right:8px;"
              onclick="navigate('subject-${sub.id}', this)">
@@ -4057,6 +4170,71 @@
 
         container.innerHTML = `
           <div class="card">
+            <h3 style="margin-bottom:4px;">➕ Neues Unterrichtsfach anlegen (nur Admin)</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+              Lege ein neues Fach inklusive erstem Unterordner an. Nur Benutzer mit Admin-Rechten können Fächer erstellen oder löschen.
+            </p>
+
+            <div class="form-grid-2">
+              <div>
+                <label style="font-size:13px; font-weight:600;">Fachname *</label>
+                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Konstruktionslehre oder SQL" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Erster Unterordner (optional)</label>
+                <input type="text" id="newSubjectFirstFolderInput" class="input-field" placeholder="Standard: Grundlagen">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Kategorie</label>
+                <select id="newSubjectCategoryInput" class="select-field">
+                  <option value="TECHNIK">TECHNIK</option>
+                  <option value="HAUPTFACH">HAUPTFACH</option>
+                  <option value="MATURA">MATURA</option>
+                  <option value="INFORMATIK">INFORMATIK</option>
+                  <option value="ALLGEMEIN">ALLGEMEIN</option>
+                </select>
+              </div>
+              <div style="display:flex; gap:12px; align-items:center;">
+                <div>
+                  <label style="font-size:13px; font-weight:600;">Icon</label>
+                  <input type="text" id="newSubjectIconInput" class="input-field" style="width:76px; text-align:center;" value="📘" maxlength="4">
+                </div>
+                <div>
+                  <label style="font-size:13px; font-weight:600;">Farbe</label>
+                  <input type="color" id="newSubjectColorInput" class="input-field" style="width:62px; height:40px; padding:2px;" value="#2563eb">
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <label class="user-check-label" style="display:inline-flex; width:auto;">
+                <input type="checkbox" id="newSubjectAccessAllInput" checked>
+                <span>Für alle Teilnehmer sichtbar freischalten</span>
+              </label>
+            </div>
+
+            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach anlegen</button>
+            <div id="newSubjectFeedback"></div>
+
+            <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
+              <h4 style="margin-bottom:10px;">Vorhandene Unterrichtsfächer (${subjects.length})</h4>
+              ${subjects.map(s => `
+                <div class="setting-row" style="padding:10px 0;">
+                  <div>
+                    <strong>${s.icon} ${s.name}</strong>
+                    <span class="count-pill" style="margin-left:6px;">${s.category}</span>
+                    <span class="count-pill" style="margin-left:4px;">${s.folders.length} Ordner</span>
+                  </div>
+                  <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-secondary" onclick="navigate('subject-${s.id}')">Öffnen</button>
+                    <button type="button" class="btn-danger" onclick="adminDeleteSubject('${s.id}')">Löschen</button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+
+          <div class="card">
             <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten (nur Admin)</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
               Fülle hier dein Impressum aus – es wird sofort im Menüpunkt „Impressum“ angezeigt und synchronisiert.
@@ -4200,33 +4378,50 @@
               Lege fest, ob ein Fach für <strong>alle Schüler</strong> sichtbar ist oder nur für ausgewählte Personen.
             </p>
 
-            ${subjects.map(sub => {
-              const badgeText = sub.accessAll
-                ? "🌍 Alle Teilnehmer freigeschaltet"
-                : `👤 Nur ${sub.allowedUsers.length} ausgewählte Person(en)`;
+            ${subjects.map(s => {
+              const isEditing = editingSubjectId === s.id;
+              const accessText = s.accessAll
+                ? "Alle Benutzer"
+                : (s.allowedUsers.length ? s.allowedUsers.map(id => users.find(u => u.id === id)?.name).filter(Boolean).join(", ") : "Niemand (nur Admin)");
+
               return `
-                <div class="setting-row">
-                  <div>
-                    <strong>${sub.icon} ${sub.name}</strong>
-                    <div style="font-size:12px; color:var(--accent); font-weight:600; margin-top:3px;">${badgeText}</div>
+                <div class="setting-row" style="flex-direction:column; align-items:stretch;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div>
+                      <span class="subject-dot" style="background:${s.color}; margin-right:6px;"></span>
+                      <strong>${s.icon} ${s.name}</strong>
+                      <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Freigeschaltet für: <strong>${accessText}</strong></div>
+                    </div>
+                    <button class="btn-secondary" onclick="toggleEditSubjectAccess('${s.id}')">${isEditing ? "Schließen" : "Zugriff bearbeiten"}</button>
                   </div>
-                  <button class="btn-secondary" onclick="openSubjectAccessEditor('${sub.id}')">Freigabe bearbeiten</button>
+
+                  ${isEditing ? `
+                    <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
+                      <label class="user-check-label" style="display:inline-flex; width:auto;">
+                        <input type="checkbox" id="chk-all-${s.id}" ${s.accessAll ? "checked" : ""} onchange="toggleAllUsersCheck('${s.id}', this.checked)">
+                        <strong>Für alle Benutzer freischalten</strong>
+                      </label>
+
+                      <div class="user-checkbox-grid">
+                        ${users.filter(u => u.role !== "Admin").map(u => {
+                          const checked = s.accessAll || tempSelectedUsers.has(u.id);
+                          return `
+                            <label class="user-check-label">
+                              <input type="checkbox" ${checked ? "checked" : ""} ${s.accessAll ? "disabled" : ""} onchange="toggleSingleUserCheck(${u.id}, this.checked)">
+                              <span>${u.name}</span>
+                            </label>
+                          `;
+                        }).join("")}
+                      </div>
+
+                      <div style="margin-top:12px; display:flex; gap:8px;">
+                        <button class="btn-primary" onclick="saveSubjectAccess('${s.id}')">Zugriff speichern</button>
+                      </div>
+                    </div>
+                  ` : ""}
                 </div>
               `;
             }).join("")}
-
-            <div id="accessEditorBox" style="display:none; margin-top:20px; padding:16px; background:var(--bg-input); border:1px solid var(--border); border-radius:12px;">
-              <h4 id="accessEditorTitle" style="margin-bottom:10px;">Freigabe bearbeiten</h4>
-              <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-                <button class="btn-primary" onclick="selectAllStudents(true)">✅ Alle auswählen</button>
-                <button class="btn-secondary" onclick="selectAllStudents(false)">❌ Auswahl aufheben</button>
-              </div>
-              <div id="studentCheckboxes" class="user-checkbox-grid"></div>
-              <div style="margin-top:14px; display:flex; justify-content:flex-end; gap:8px;">
-                <button class="btn-secondary" onclick="document.getElementById('accessEditorBox').style.display='none'">Abbrechen</button>
-                <button class="btn-primary" onclick="saveSubjectAccess()">Speichern</button>
-              </div>
-            </div>
           </div>
         `;
       }
@@ -4234,15 +4429,13 @@
       typesetMath(container);
     }
 
-    function renderQuestionBlock(q, num, canDelete, subId = "", folderId = "") {
-      const tag = q.subjectName ? `<span class="count-pill" style="margin-bottom:6px; display:inline-block;">${q.subjectName} • ${q.folderName}</span>` : "";
+    function renderQuestionBlock(q, index, canDelete, subId, folderId) {
       const delBtn = canDelete ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>` : "";
-
       if (q.type === "mc") {
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div>${tag}<div style="font-weight:700; font-size:15px;">${num}. ${q.question}</div></div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+              <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
               ${delBtn}
             </div>
             <div style="margin-top:8px;">
@@ -4258,13 +4451,13 @@
       } else {
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div>${tag}<div style="font-weight:700; font-size:15px;">${num}. ${q.question}</div></div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+              <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
               ${delBtn}
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
-              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
-              <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', document.getElementById('ans-${q.id}').value, '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
+              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Ergebnis eingeben...">
+              <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
             </div>
             <div id="fb-${q.id}"></div>
           </div>
@@ -4273,89 +4466,36 @@
     }
 
     function toggleNewQuestionFields() {
-      const val = document.getElementById("newQType").value;
-      document.getElementById("mcFieldsBox").style.display = val === "mc" ? "block" : "none";
-      document.getElementById("calcFieldsBox").style.display = val === "calc" ? "block" : "none";
+      const type = document.getElementById("newQType").value;
+      document.getElementById("mcFieldsBox").style.display = type === "mc" ? "block" : "none";
+      document.getElementById("calcFieldsBox").style.display = type === "calc" ? "block" : "none";
     }
 
-    function openSubjectAccessEditor(subId) {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      editingSubjectId = subId;
-      const sub = subjects.find(s => s.id === subId);
-      const students = users.filter(u => u.role !== "Admin");
-      document.getElementById("accessEditorTitle").innerText = `Zugriff festlegen für: ${sub.name}`;
-      tempSelectedUsers = sub.accessAll ? new Set(students.map(u => u.id)) : new Set(sub.allowedUsers);
-      renderStudentCheckboxes();
-      document.getElementById("accessEditorBox").style.display = "block";
-    }
-
-    function renderStudentCheckboxes() {
-      const students = users.filter(u => u.role !== "Admin");
-      document.getElementById("studentCheckboxes").innerHTML = students.map(u => `
-        <label class="user-check-label">
-          <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleStudentSelection(${u.id}, this.checked)">
-          <span>${u.name}</span>
-        </label>
-      `).join("");
-    }
-
-    function toggleStudentSelection(userId, checked) {
-      if (checked) tempSelectedUsers.add(userId);
-      else tempSelectedUsers.delete(userId);
-    }
-
-    function selectAllStudents(all) {
-      const students = users.filter(u => u.role !== "Admin");
-      tempSelectedUsers = all ? new Set(students.map(u => u.id)) : new Set();
-      renderStudentCheckboxes();
-    }
-
-    function saveSubjectAccess() {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      const sub = subjects.find(s => s.id === editingSubjectId);
-      const students = users.filter(u => u.role !== "Admin");
-      if (tempSelectedUsers.size === students.length) {
-        sub.accessAll = true;
-        sub.allowedUsers = [];
-      } else {
-        sub.accessAll = false;
-        sub.allowedUsers = Array.from(tempSelectedUsers);
-      }
-      saveSubjects();
-      renderSidebar();
-      renderView();
-    }
-
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
-    function saveCustomFormulas() {
-      localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
-      queueCloudSync();
-    }
-
-    function copyAiPromptForFolder(subName, folderName) {
-      const promptText = `Erstelle für das Fach "${subName}" im Unterordner "${folderName}" 3 Lernfragen als reines JSON-Array ohne Markdown-Backticks. Format: [{"type":"mc","question":"...","options":["A","B","C","D"],"correct":"A","explanation":"..."},{"type":"calc","question":"...","answer":"42","explanation":"..."}]`;
-      navigator.clipboard?.writeText(promptText);
-      const fb = document.getElementById("aiImportMsg");
-      if (fb) {
-        fb.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt kopiert! Füge ihn bei deiner KI ein und kopiere die JSON-Antwort unten hinein.</div>`;
-      }
+    function copyAiPromptForFolder(subjectName, folderName) {
+      const promptText = `Erstelle mir 5 Lernfragen für das Fach "${subjectName}" und den Unterordner "${folderName}".\nAntworte AUSSCHLIESSLICH mit einem gültigen JSON-Array ohne Markdown-Backticks in genau diesem Format:\n[\n  {\n    "type": "mc",\n    "question": "Fragetext...",\n    "options": ["Option A", "Option B", "Option C", "Option D"],\n    "correct": "Option A",\n    "explanation": "Kurze Erklärung"\n  },\n  {\n    "type": "calc",\n    "question": "Rechenfrage...",\n    "answer": "42",\n    "explanation": "Lösungsweg"\n  }\n]`;
+      navigator.clipboard?.writeText(promptText).then(() => {
+        alert("KI-Prompt kopiert! Jetzt in ChatGPT/Gemini einfügen und den JSON-Code unten wieder einsetzen.");
+      }).catch(() => {
+        prompt("Kopiere diesen Prompt:", promptText);
+      });
     }
 
     function importAiQuestionsToFolder(subId, folderId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen einfügen.");
+      if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
       const raw = document.getElementById("aiCodePasteArea").value.trim();
-      const fb = document.getElementById("aiImportMsg");
+      const msgBox = document.getElementById("aiImportMsg");
       if (!raw) return;
 
+      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
       try {
-        const cleanJson = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-        const parsed = JSON.parse(cleanJson);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
+        const parsed = JSON.parse(cleaned);
+        const arr = Array.isArray(parsed) ? parsed : [parsed];
         const sub = subjects.find(s => s.id === subId);
         const folder = sub.folders.find(f => f.id === folderId);
         let added = 0;
 
-        list.forEach((item, idx) => {
+        arr.forEach((item, idx) => {
           if (!item || !item.question) return;
           if (item.type === "mc" && Array.isArray(item.options) && item.options.length >= 2) {
             folder.questions.push({
@@ -4364,7 +4504,7 @@
               question: String(item.question),
               options: item.options.map(String),
               correct: String(item.correct || item.options[0]),
-              explanation: String(item.explanation || "Aus KI-Import eingefügt.")
+              explanation: String(item.explanation || "Automatisch importiert.")
             });
             added++;
           } else if (item.answer !== undefined) {
@@ -4373,7 +4513,7 @@
               type: "calc",
               question: String(item.question),
               answer: String(item.answer),
-              explanation: String(item.explanation || "Aus KI-Import eingefügt.")
+              explanation: String(item.explanation || "Automatisch importiert.")
             });
             added++;
           }
@@ -4382,93 +4522,128 @@
         saveSubjects();
         renderSidebar();
         renderView();
-        const afterFb = document.getElementById("aiImportMsg");
-        if (afterFb) {
-          afterFb.innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
-        }
+        document.getElementById("aiImportMsg").innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
       } catch (e) {
-        if (fb) {
-          fb.innerHTML = `<div class="result-banner result-err">❌ Ungültiges Code-Format. Bitte gültiges JSON einfügen.</div>`;
-        }
+        msgBox.innerHTML = `<div class="result-banner result-err">❌ Ungültiges JSON-Format. Bitte prüfe den eingefügten Code.</div>`;
       }
+    }
+
+    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
+    function saveCustomFormulas() {
+      localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
+      queueCloudSync();
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine technische oder mathematische Formel inkl. Erklärung und Variablentabelle als reines JSON-Objekt ohne Markdown-Backticks. Format: {"title":"Formelname","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Kurze Erklärung der Formel.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Variable 1 [Einheit]","var1Default":10,"var2Label":"Variable 2 [Einheit]","var2Default":2,"formulaType":"mul"} (formulaType: "mul", "div", "add", "sub").`;
-      navigator.clipboard?.writeText(promptText);
-      const fb = document.getElementById("aiFormulaMsg");
-      if (fb) {
-        fb.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt kopiert!</div>`;
-      }
+      const promptText = `Erstelle mir eine Lernformel inklusive Erklärung und Variablentabelle.\nAntworte AUSSCHLIESSLICH mit gültigem JSON ohne Markdown-Backticks in genau diesem Format:\n{\n  "title": "Name der Formel",\n  "category": "Fachbereich",\n  "formula": "F = m \\\\cdot a",\n  "description": "Kurze, klare Erklärung wofür die Formel verwendet wird.",\n  "variables": [\n    { "symbol": "F", "meaning": "Kraft in Newton (N)" },\n    { "symbol": "m", "meaning": "Masse in Kilogramm (kg)" },\n    { "symbol": "a", "meaning": "Beschleunigung in m/s²" }\n  ],\n  "var1Label": "Masse m [kg]",\n  "var1Default": 10,\n  "var2Label": "Beschleunigung a [m/s²]",\n  "var2Default": 9.81,\n  "formulaType": "mul"\n}\n(formulaType kann "mul", "div" oder "add" sein)`;
+      navigator.clipboard?.writeText(promptText).then(() => {
+        alert("Formel-Prompt kopiert!");
+      }).catch(() => {
+        prompt("Kopiere diesen Prompt:", promptText);
+      });
     }
 
     function importAiFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln einfügen.");
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln importieren.");
       const raw = document.getElementById("aiFormulaCodeArea").value.trim();
-      const fb = document.getElementById("aiFormulaMsg");
+      const msgBox = document.getElementById("aiFormulaMsg");
       if (!raw) return;
+      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
       try {
-        const cleanJson = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-        const item = JSON.parse(cleanJson);
-        if (!item || !item.title || !item.formula) throw new Error("Missing fields");
+        const parsed = JSON.parse(cleaned);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        let count = 0;
 
-        const newFormula = {
-          id: "cf-" + Date.now(),
-          title: String(item.title),
-          category: String(item.category || "Allgemein"),
-          formula: String(item.formula),
-          description: String(item.description || ""),
-          variables: Array.isArray(item.variables)
+        list.forEach((item, idx) => {
+          if (!item || !item.title || !item.formula) return;
+          const cleanVars = Array.isArray(item.variables)
             ? item.variables
                 .filter(v => v && v.symbol && v.meaning)
                 .map(v => ({ symbol: String(v.symbol), meaning: String(v.meaning) }))
-            : [],
-          var1Label: String(item.var1Label || "Wert 1"),
-          var1Default: Number(item.var1Default ?? 10),
-          var2Label: String(item.var2Label || "Wert 2"),
-          var2Default: Number(item.var2Default ?? 2),
-          formulaType: ["mul", "div", "add", "sub"].includes(item.formulaType) ? item.formulaType : "mul"
-        };
+            : [];
 
-        customFormulas.push(newFormula);
+          customFormulas.push({
+            id: "cf-" + Date.now() + "-" + idx,
+            title: String(item.title),
+            category: String(item.category || "Allgemein"),
+            formula: String(item.formula),
+            description: String(item.description || ""),
+            variables: cleanVars,
+            var1Label: String(item.var1Label || "Wert 1"),
+            var1Default: Number(item.var1Default ?? 10),
+            var2Label: String(item.var2Label || "Wert 2"),
+            var2Default: Number(item.var2Default ?? 2),
+            formulaType: String(item.formulaType || "mul")
+          });
+          count++;
+        });
+
         saveCustomFormulas();
-        activeFormulaCategoryFilter = "ALL";
-        activeCalcTab = "ai-custom";
         renderSidebar();
+        activeCalcTab = "ai-custom";
+        activeFormulaCategoryFilter = "ALL";
         renderView();
-        const afterFb = document.getElementById("aiFormulaMsg");
-        if (afterFb) {
-          afterFb.innerHTML = `<div class="result-banner result-ok">✅ Formel „${newFormula.title}“ im Tab „KI-Formeln“ eingefügt!</div>`;
-        }
+        setTimeout(() => {
+          const targetMsg = document.getElementById("aiFormulaMsg");
+          if (targetMsg) targetMsg.innerHTML = `<div class="result-banner result-ok">✅ ${count} Formel(n) eingefügt!</div>`;
+        }, 30);
       } catch (e) {
-        if (fb) {
-          fb.innerHTML = `<div class="result-banner result-err">❌ Formel-Code konnte nicht gelesen werden. Bitte gültiges JSON prüfen.</div>`;
-        }
+        msgBox.innerHTML = `<div class="result-banner result-err">❌ Code konnte nicht gelesen werden. Bitte JSON prüfen.</div>`;
       }
     }
 
     function runCustomFormulaCalc(cfId) {
       const cf = customFormulas.find(f => f.id === cfId);
       if (!cf) return;
-      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value) || 0;
-      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value) || 0;
-      let res = 0;
-      if (cf.formulaType === "mul") res = v1 * v2;
-      else if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : NaN;
-      else if (cf.formulaType === "add") res = v1 + v2;
-      else if (cf.formulaType === "sub") res = v1 - v2;
+      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value);
+      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value);
+      if (isNaN(v1) || isNaN(v2)) return;
 
-      const box = document.getElementById("cfres-" + cfId);
-      box.innerHTML = isNaN(res)
-        ? `<div class="result-banner result-err">Division durch 0 nicht möglich.</div>`
-        : `<div class="result-banner result-ok">Ergebnis: <strong>${Number(res.toFixed(4))}</strong></div>`;
+      let res = 0;
+      if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : NaN;
+      else if (cf.formulaType === "add") res = v1 + v2;
+      else res = v1 * v2;
+
+      document.getElementById("cfres-" + cfId).innerHTML = `<div class="result-banner result-ok">Ergebnis: ${isNaN(res) ? "Division durch 0" : res.toFixed(3)}</div>`;
     }
 
     function deleteCustomFormula(cfId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
       customFormulas = customFormulas.filter(f => f.id !== cfId);
       saveCustomFormulas();
+      renderSidebar();
+      renderView();
+    }
+
+    function toggleEditSubjectAccess(subId) {
+      if (editingSubjectId === subId) {
+        editingSubjectId = null;
+      } else {
+        editingSubjectId = subId;
+        const sub = subjects.find(s => s.id === subId);
+        tempSelectedUsers = new Set(sub.allowedUsers || []);
+      }
+      renderView();
+    }
+
+    function toggleAllUsersCheck(subId, isChecked) {
+      const sub = subjects.find(s => s.id === subId);
+      sub.accessAll = isChecked;
+      renderView();
+    }
+
+    function toggleSingleUserCheck(userId, isChecked) {
+      if (isChecked) tempSelectedUsers.add(userId);
+      else tempSelectedUsers.delete(userId);
+    }
+
+    function saveSubjectAccess(subId) {
+      if (!isAdmin()) return alert("Nur Admins dürfen Zugriffsrechte ändern.");
+      const sub = subjects.find(s => s.id === subId);
+      sub.allowedUsers = Array.from(tempSelectedUsers);
+      editingSubjectId = null;
+      saveSubjects();
       renderSidebar();
       renderView();
     }
