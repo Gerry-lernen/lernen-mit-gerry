@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lernen mit Gerry – Privates Lernportal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     window.MathJax = {
       tex: {
@@ -696,7 +697,7 @@
     <div class="top-status-row">
       <div class="status-indicator">
         <span class="dot-green"></span>
-        <span id="statusUserText">Aktiv als <strong>Gerry (Admin)</strong> • Desktop &amp; Smartphone optimiert</span>
+        <span id="statusUserText">Aktiv als <strong>Gerry (Admin)</strong> • Live-Sync aktiv</span>
       </div>
       <div class="top-actions-right">
         <button class="invite-pill-btn home-pill" id="topBackHomeBtn" style="display:none;" onclick="goToStartseite()">
@@ -754,7 +755,7 @@
       </div>
 
       <div class="gdpr-box">
-        🔒 <strong>DSGVO &amp; Privatsphäre:</strong> Geschlossene Lerngruppe. Chats &amp; Kalenderfreigaben sind nur zwischen bestätigten Freunden möglich. Alle Inhalte sind selbst erstellt – keine Gewähr für Prüfungen.
+        🔒 <strong>DSGVO &amp; Privatsphäre:</strong> Geschlossene Lerngruppe mit Live-Synchronisation. Chats &amp; Kalenderfreigaben sind nur zwischen bestätigten Freunden möglich. Alle Inhalte sind selbst erstellt – keine Gewähr für Prüfungen.
       </div>
     </div>
   </div>
@@ -893,6 +894,120 @@
   </div>
 
   <script>
+    /* ==========================================================
+       SUPABASE CLOUD-SYNCHRONISATION (LEADERBOARD, ORDNER, CHAT)
+       ========================================================== */
+    const SUPABASE_URL = "https://qokjzpdxuhopepgsdyon.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_C_0daRBdXaHKe-KhAjuKfw_LqihH_nP";
+    const ROOM_ID = "lernen-mit-gerry-main";
+    const sbClient = (window.supabase && typeof window.supabase.createClient === "function")
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+      : null;
+
+    let isApplyingCloudState = false;
+    let cloudSyncTimer = null;
+
+    function queueCloudSync() {
+      if (!sbClient || isApplyingCloudState) return;
+      clearTimeout(cloudSyncTimer);
+      cloudSyncTimer = setTimeout(async () => {
+        try {
+          const payload = {
+            users,
+            subjects,
+            exams,
+            friendships,
+            chatMessages,
+            customFormulas
+          };
+          await sbClient
+            .from("portal_state")
+            .upsert({ id: ROOM_ID, data: payload, updated_at: new Date().toISOString() });
+        } catch (err) {
+          console.warn("Cloud-Sync Hinweis:", err);
+        }
+      }, 250);
+    }
+
+    async function loadFromCloud(forceOverwrite = false) {
+      if (!sbClient) return;
+      try {
+        const { data, error } = await sbClient
+          .from("portal_state")
+          .select("data")
+          .eq("id", ROOM_ID)
+          .maybeSingle();
+
+        if (error || !data || !data.data) {
+          if (forceOverwrite) queueCloudSync();
+          return;
+        }
+
+        const d = data.data;
+        isApplyingCloudState = true;
+
+        if (Array.isArray(d.users) && d.users.length) {
+          users = d.users;
+          localStorage.setItem("lmg_users_v3", JSON.stringify(users));
+          const updatedMe = users.find(u => u.id === currentUser.id);
+          if (updatedMe) currentUser = updatedMe;
+        }
+        if (Array.isArray(d.subjects) && d.subjects.length) {
+          subjects = d.subjects;
+          localStorage.setItem("lmg_subjects_v3", JSON.stringify(subjects));
+        }
+        if (Array.isArray(d.exams)) {
+          exams = d.exams;
+          localStorage.setItem("lmg_exams_v1", JSON.stringify(exams));
+        }
+        if (Array.isArray(d.friendships)) {
+          friendships = d.friendships;
+          localStorage.setItem("lmg_friendships_v1", JSON.stringify(friendships));
+        }
+        if (Array.isArray(d.chatMessages)) {
+          chatMessages = d.chatMessages;
+          localStorage.setItem("lmg_chat_v1", JSON.stringify(chatMessages));
+        }
+        if (Array.isArray(d.customFormulas)) {
+          customFormulas = d.customFormulas;
+          localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
+        }
+
+        isApplyingCloudState = false;
+
+        if (!isLoginScreenVisible) {
+          renderSidebar();
+          renderView();
+        }
+      } catch (err) {
+        isApplyingCloudState = false;
+        console.warn("Cloud-Load Hinweis:", err);
+      }
+    }
+
+    function initCloudRealtime() {
+      if (!sbClient) return;
+      loadFromCloud(true);
+
+      try {
+        sbClient
+          .channel("lmg-portal-realtime")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "portal_state", filter: `id=eq.${ROOM_ID}` },
+            () => {
+              loadFromCloud(false);
+            }
+          )
+          .subscribe();
+      } catch (_) {}
+
+      // Fallback-Polling alle 8 Sekunden für maximale Zuverlässigkeit
+      setInterval(() => {
+        loadFromCloud(false);
+      }, 8000);
+    }
+
     function typesetMath(el) {
       if (window.MathJax && typeof window.MathJax.typesetPromise === "function") {
         const targets = el ? [el] : undefined;
@@ -926,6 +1041,7 @@
     let users = JSON.parse(localStorage.getItem("lmg_users_v3")) || defaultUsers;
     function saveUsers() {
       localStorage.setItem("lmg_users_v3", JSON.stringify(users));
+      queueCloudSync();
     }
 
     const defaultFriendships = [
@@ -935,6 +1051,7 @@
     let friendships = JSON.parse(localStorage.getItem("lmg_friendships_v1")) || defaultFriendships;
     function saveFriendships() {
       localStorage.setItem("lmg_friendships_v1", JSON.stringify(friendships));
+      queueCloudSync();
     }
 
     const defaultChatMessages = [
@@ -944,6 +1061,7 @@
     let chatMessages = JSON.parse(localStorage.getItem("lmg_chat_v1")) || defaultChatMessages;
     function saveChatMessages() {
       localStorage.setItem("lmg_chat_v1", JSON.stringify(chatMessages));
+      queueCloudSync();
     }
 
     let activeChatPartnerId = null;
@@ -1161,6 +1279,7 @@
     let exams = JSON.parse(localStorage.getItem("lmg_exams_v1")) || getDefaultExams();
     function saveExams() {
       localStorage.setItem("lmg_exams_v1", JSON.stringify(exams));
+      queueCloudSync();
     }
 
     function getDaysUntil(dateStr) {
@@ -1293,6 +1412,7 @@
     let subjects = JSON.parse(localStorage.getItem("lmg_subjects_v3")) || defaultSubjects;
     function saveSubjects() {
       localStorage.setItem("lmg_subjects_v3", JSON.stringify(subjects));
+      queueCloudSync();
     }
 
     let currentUser = users[0];
@@ -1329,6 +1449,7 @@
       syncBackHomeButtons();
 
       if (!isLoginScreenVisible) {
+        loadFromCloud(false);
         renderSidebar();
         renderView();
       }
@@ -1435,7 +1556,7 @@
 
     function updateTopStatusBar() {
       document.getElementById("statusUserText").innerHTML =
-        `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Desktop &amp; Smartphone optimiert`;
+        `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Live-Sync aktiv`;
     }
 
     /* ==========================================================
@@ -1587,6 +1708,7 @@
       if (btnEl) btnEl.classList.add("active");
       toggleSidebar(false);
       syncBackHomeButtons();
+      loadFromCloud(false);
       renderView();
     }
 
@@ -2252,9 +2374,12 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
               <div>
                 <h3>Punkte-Rangliste der Lerngruppe</h3>
-                <p style="font-size:13px; color:var(--text-muted);">Sammle Punkte durch gelöste Übungsfragen (+10 Pkt) und den Ableitungstrainer (+15 Pkt).</p>
+                <p style="font-size:13px; color:var(--text-muted);">Live synchronisiert über Supabase: +10 Pkt pro Frage, +15 Pkt im Ableitungstrainer.</p>
               </div>
-              <span class="points-pill" style="cursor:default;">Dein Stand: ${currentUser.points} Pkt</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="loadFromCloud(false)">🔄 Aktualisieren</button>
+                <span class="points-pill" style="cursor:default;">Dein Stand: ${currentUser.points} Pkt</span>
+              </div>
             </div>
 
             ${ranked.map((u, idx) => {
@@ -2839,6 +2964,7 @@
     let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
     function saveCustomFormulas() {
       localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
+      queueCloudSync();
     }
 
     function copyAiPromptForFolder(subName, folderName) {
@@ -3000,10 +3126,11 @@
       }
     }
 
-    // Initiales Rendering
+    // Initiales Rendering & Supabase-Start
     updateTopStatusBar();
     syncBackHomeButtons();
     typesetMath();
+    initCloudRealtime();
   </script>
 </body>
 </html>
