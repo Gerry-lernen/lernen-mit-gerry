@@ -524,6 +524,34 @@
       display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
     }
 
+    /* CUSTOM EXAM BUILDER */
+    .exam-builder-subject-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .folder-chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .folder-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .folder-chip input { cursor: pointer; }
+
     /* FAVORITES GRID */
     .fav-grid {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -541,6 +569,19 @@
       display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
       border-bottom: 1px solid var(--border); padding-bottom: 12px;
     }
+    .filter-strip {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .filter-btn {
+      padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: var(--accent); }
+    .filter-btn.active {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+
     .formula-box {
       background: var(--bg-input);
       border: 1px solid var(--border);
@@ -1002,7 +1043,6 @@
           .subscribe();
       } catch (_) {}
 
-      // Fallback-Polling alle 8 Sekunden für maximale Zuverlässigkeit
       setInterval(() => {
         loadFromCloud(false);
       }, 8000);
@@ -1424,6 +1464,312 @@
     let tempSelectedUsers = new Set();
 
     /* ==========================================================
+       EIGENE PRÜFUNG (AUS FREIGESCHALTETEN FÄCHERN & UNTERORDNERN)
+       ========================================================== */
+    let selectedExamFolderKeys = new Set();
+    let customExamQuestionCount = 10;
+    let activeExamSession = null; // { title, questions: [], answered: {} }
+
+    function ensureDefaultExamSelection(visibleSubjects) {
+      if (selectedExamFolderKeys.size > 0) return;
+      visibleSubjects.forEach(sub => {
+        sub.folders.forEach(f => {
+          selectedExamFolderKeys.add(`${sub.id}::${f.id}`);
+        });
+      });
+    }
+
+    function toggleExamFolderSelection(key, checked) {
+      if (checked) selectedExamFolderKeys.add(key);
+      else selectedExamFolderKeys.delete(key);
+      renderView();
+    }
+
+    function setAllExamFolders(selectAll) {
+      const visible = getVisibleSubjects();
+      selectedExamFolderKeys.clear();
+      if (selectAll) {
+        visible.forEach(sub => {
+          sub.folders.forEach(f => selectedExamFolderKeys.add(`${sub.id}::${f.id}`));
+        });
+      }
+      renderView();
+    }
+
+    function toggleExamSubjectFolders(subId, selectAll) {
+      const sub = getVisibleSubjects().find(s => s.id === subId);
+      if (!sub) return;
+      sub.folders.forEach(f => {
+        const key = `${sub.id}::${f.id}`;
+        if (selectAll) selectedExamFolderKeys.add(key);
+        else selectedExamFolderKeys.delete(key);
+      });
+      renderView();
+    }
+
+    function startConfiguredExam() {
+      const visible = getVisibleSubjects();
+      const pool = [];
+
+      visible.forEach(sub => {
+        sub.folders.forEach(f => {
+          const key = `${sub.id}::${f.id}`;
+          if (selectedExamFolderKeys.has(key)) {
+            f.questions.forEach(q => {
+              pool.push({
+                ...q,
+                subjectName: `${sub.icon} ${sub.name}`,
+                folderName: f.name
+              });
+            });
+          }
+        });
+      });
+
+      if (pool.length === 0) {
+        alert("Bitte wähle mindestens einen Unterordner mit Fragen aus!");
+        return;
+      }
+
+      const countInput = document.getElementById("customExamCountInput");
+      const requested = countInput ? parseInt(countInput.value, 10) : customExamQuestionCount;
+      const limit = Math.max(1, Math.min(pool.length, isNaN(requested) ? 10 : requested));
+      customExamQuestionCount = limit;
+
+      // Fragen mischen (Fisher-Yates)
+      const shuffled = [...pool];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      activeExamSession = {
+        questions: shuffled.slice(0, limit),
+        answered: {}, // qId -> { correct: boolean, userAnswer: string, pointsAwarded: boolean }
+        finished: false
+      };
+      renderView();
+    }
+
+    function submitExamQuestionAnswer(qId, givenAnswer, expectedAnswer, explanation, isMc) {
+      if (!activeExamSession) return;
+      const prev = activeExamSession.answered[qId];
+      let isRight = false;
+
+      if (isMc) {
+        isRight = givenAnswer === expectedAnswer;
+      } else {
+        isRight = givenAnswer.trim().replace(",", ".").toLowerCase() === expectedAnswer.trim().replace(",", ".").toLowerCase();
+      }
+
+      let awarded = false;
+      if (isRight && (!prev || !prev.pointsAwarded)) {
+        currentUser.points += 10;
+        saveUsers();
+        renderSidebar();
+        awarded = true;
+      }
+
+      activeExamSession.answered[qId] = {
+        correct: isRight,
+        userAnswer: givenAnswer,
+        pointsAwarded: (prev && prev.pointsAwarded) || awarded
+      };
+
+      const fb = document.getElementById("exam-fb-" + qId);
+      if (fb) {
+        if (isRight) {
+          fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! ${awarded ? "(+10 Pkt) " : ""}– ${explanation}</div>`;
+        } else {
+          fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expectedAnswer}) – ${explanation}</div>`;
+        }
+        typesetMath(fb);
+      }
+      updateExamSummaryBar();
+    }
+
+    function updateExamSummaryBar() {
+      if (!activeExamSession) return;
+      const total = activeExamSession.questions.length;
+      const entries = Object.values(activeExamSession.answered);
+      const answeredCount = entries.length;
+      const correctCount = entries.filter(e => e.correct).length;
+      const bar = document.getElementById("examLiveSummary");
+      if (bar) {
+        bar.innerHTML = `Beantwortet: <strong>${answeredCount} / ${total}</strong> · Richtig: <strong>${correctCount}</strong>`;
+      }
+    }
+
+    function finishExamSession() {
+      if (!activeExamSession) return;
+      activeExamSession.finished = true;
+      renderView();
+    }
+
+    function resetExamSessionToBuilder() {
+      activeExamSession = null;
+      renderView();
+    }
+
+    function renderCustomExamView(visibleSubjects) {
+      if (activeExamSession) {
+        const total = activeExamSession.questions.length;
+        const entries = Object.values(activeExamSession.answered);
+        const answeredCount = entries.length;
+        const correctCount = entries.filter(e => e.correct).length;
+        const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+
+        return `
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+              <div>
+                <h3>🎓 Laufende Prüfung (${total} Fragen)</h3>
+                <div id="examLiveSummary" style="font-size:13px; color:var(--text-muted); margin-top:4px;">
+                  Beantwortet: <strong>${answeredCount} / ${total}</strong> · Richtig: <strong>${correctCount}</strong>
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                ${!activeExamSession.finished ? `<button class="btn-primary" onclick="finishExamSession()">📊 Auswertung anzeigen</button>` : ""}
+                <button class="btn-secondary" onclick="resetExamSessionToBuilder()">⚙️ Neue Prüfung zusammenstellen</button>
+              </div>
+            </div>
+
+            ${activeExamSession.finished ? `
+              <div class="result-banner ${pct >= 50 ? 'result-ok' : 'result-err'}" style="margin-bottom:16px; font-size:15px;">
+                🏁 Prüfung beendet: <strong>${correctCount} von ${total}</strong> Fragen richtig (<strong>${pct}%</strong>) · Aktueller Punktestand: <strong>${currentUser.points} Pkt</strong>
+              </div>
+            ` : ""}
+
+            ${activeExamSession.questions.map((q, idx) => {
+              const prev = activeExamSession.answered[q.id];
+              const existingFb = prev
+                ? (prev.correct
+                    ? `<div class="result-banner result-ok">✅ Richtig beantwortet – ${q.explanation}</div>`
+                    : `<div class="result-banner result-err">❌ Falsch (Deine Antwort: „${prev.userAnswer}“ · Richtig: ${q.correct || q.answer}) – ${q.explanation}</div>`)
+                : "";
+
+              if (q.type === "mc") {
+                return `
+                  <div class="question-card">
+                    <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${q.subjectName} • ${q.folderName}</span>
+                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${q.question}</div>
+                    <div style="margin-top:8px;">
+                      ${q.options.map(opt => `
+                        <div class="mc-option" onclick="submitExamQuestionAnswer('${q.id}', '${opt.replace(/'/g, "\\'")}', '${q.correct.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}', true)">
+                          <span>🔘</span> <span>${opt}</span>
+                        </div>
+                      `).join("")}
+                    </div>
+                    <div id="exam-fb-${q.id}">${existingFb}</div>
+                  </div>
+                `;
+              } else {
+                return `
+                  <div class="question-card">
+                    <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${q.subjectName} • ${q.folderName}</span>
+                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${q.question}</div>
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                      <input type="text" id="exam-ans-${q.id}" class="input-field" style="margin:0;" value="${prev ? prev.userAnswer.replace(/"/g, '&quot;') : ''}" placeholder="Antwort eingeben...">
+                      <button class="btn-primary" onclick="submitExamQuestionAnswer('${q.id}', document.getElementById('exam-ans-${q.id}').value, '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}', false)">Prüfen</button>
+                    </div>
+                    <div id="exam-fb-${q.id}">${existingFb}</div>
+                  </div>
+                `;
+              }
+            }).join("")}
+          </div>
+        `;
+      }
+
+      ensureDefaultExamSelection(visibleSubjects);
+
+      let availablePoolCount = 0;
+      visibleSubjects.forEach(sub => {
+        sub.folders.forEach(f => {
+          if (selectedExamFolderKeys.has(`${sub.id}::${f.id}`)) {
+            availablePoolCount += f.questions.length;
+          }
+        });
+      });
+
+      const clampedDefaultCount = availablePoolCount > 0
+        ? Math.min(customExamQuestionCount, availablePoolCount)
+        : 0;
+
+      return `
+        <div class="card">
+          <h3 style="margin-bottom:4px;">🎓 Eigene Prüfung zusammenstellen</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+            Wähle aus deinen freigeschalteten Fächern und Unterordnern gezielt die Themen aus, die geprüft werden sollen.
+          </p>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn-secondary" onclick="setAllExamFolders(true)">✅ Alle Ordner wählen</button>
+              <button type="button" class="btn-secondary" onclick="setAllExamFolders(false)">❌ Alle abwählen</button>
+            </div>
+            <span class="count-pill">${availablePoolCount} Fragen in Auswahl verfügbar</span>
+          </div>
+
+          ${visibleSubjects.length === 0
+            ? `<p style="font-size:13px; color:var(--text-muted);">Aktuell sind keine Fächer für dich freigeschaltet.</p>`
+            : visibleSubjects.map(sub => {
+                const subTotalQ = sub.folders.reduce((acc, f) => acc + f.questions.length, 0);
+                return `
+                  <div class="exam-builder-subject-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                      <div style="font-weight:800; font-size:15px;">
+                        <span class="subject-dot" style="background:${sub.color}; margin-right:6px;"></span>
+                        ${sub.icon} ${sub.name} <span style="font-size:12px; font-weight:600; color:var(--text-muted);">(${subTotalQ} Fragen)</span>
+                      </div>
+                      <div style="display:flex; gap:6px;">
+                        <button type="button" class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleExamSubjectFolders('${sub.id}', true)">Alle</button>
+                        <button type="button" class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleExamSubjectFolders('${sub.id}', false)">Keine</button>
+                      </div>
+                    </div>
+
+                    <div class="folder-chip-grid">
+                      ${sub.folders.length === 0
+                        ? `<span style="font-size:12.5px; color:var(--text-muted);">Keine Unterordner vorhanden.</span>`
+                        : sub.folders.map(f => {
+                            const key = `${sub.id}::${f.id}`;
+                            const checked = selectedExamFolderKeys.has(key);
+                            return `
+                              <label class="folder-chip" style="${checked ? 'border-color:var(--accent); background:var(--accent-soft); font-weight:700;' : ''}">
+                                <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleExamFolderSelection('${key}', this.checked)">
+                                <span>📁 ${f.name} (${f.questions.length})</span>
+                              </label>
+                            `;
+                          }).join("")
+                      }
+                    </div>
+                  </div>
+                `;
+              }).join("")
+          }
+
+          <div class="form-grid-2" style="margin-top:16px; align-items:end;">
+            <div>
+              <label style="font-size:13px; font-weight:600;">Anzahl der Prüfungsfragen (max. ${Math.max(1, availablePoolCount)})</label>
+              <input type="number"
+                     id="customExamCountInput"
+                     class="input-field"
+                     style="margin-bottom:0;"
+                     min="1"
+                     max="${Math.max(1, availablePoolCount)}"
+                     value="${Math.max(1, clampedDefaultCount)}">
+            </div>
+            <div>
+              <button type="button" class="btn-primary" style="width:100%; justify-content:center; padding:12px 18px;" onclick="startConfiguredExam()">
+                🚀 Eigene Prüfung starten (${Math.max(1, clampedDefaultCount)} Fragen)
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ==========================================================
        2. STARTBILDSCHIRM / LOGIN & PASSWORT-ÄNDERUNG
        ========================================================== */
     function switchLoginTab(tab) {
@@ -1496,6 +1842,7 @@
       currentView = "home";
       activeFolderId = null;
       activeChatPartnerId = null;
+      activeExamSession = null;
       friendSearchQuery = "";
       updateTopStatusBar();
       toggleLoginScreen(true);
@@ -1704,6 +2051,7 @@
     function navigate(viewId, btnEl) {
       currentView = viewId;
       activeFolderId = null;
+      activeExamSession = null;
       document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
       if (btnEl) btnEl.classList.add("active");
       toggleSidebar(false);
@@ -1713,7 +2061,7 @@
     }
 
     /* ==========================================================
-       6. ABLEITUNGSTRAINER & FORMELRECHNER (MIT MATHJAX)
+       6. ABLEITUNGSTRAINER & FORMELRECHNER (MIT MATHJAX & KATEGORIE-FILTER)
        ========================================================== */
     function renderSpickzettelAbleitungenCard() {
       return `
@@ -1864,6 +2212,61 @@
     }
 
     let activeCalcTab = "cutting";
+    let activeFormulaCategoryFilter = "ALL";
+
+    function renderCustomFormulasTabContent() {
+      const categories = ["ALL", ...Array.from(new Set(customFormulas.map(f => f.category || "Allgemein")))];
+      const filtered = activeFormulaCategoryFilter === "ALL"
+        ? customFormulas
+        : customFormulas.filter(f => (f.category || "Allgemein") === activeFormulaCategoryFilter);
+
+      return `
+        <div class="filter-strip">
+          ${categories.map(cat => `
+            <button type="button"
+                    class="filter-btn ${activeFormulaCategoryFilter === cat ? 'active' : ''}"
+                    onclick="activeFormulaCategoryFilter='${cat.replace(/'/g, "\\'")}'; renderView();">
+              ${cat === "ALL" ? `Alle (${customFormulas.length})` : `${cat} (${customFormulas.filter(x => (x.category || "Allgemein") === cat).length})`}
+            </button>
+          `).join("")}
+        </div>
+        ${filtered.length === 0
+          ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Keine Formeln in dieser Kategorie vorhanden. Nutze unten das Feld, um erstellten Formel-Code einzufügen.</p>`
+          : filtered.map(cf => `
+            <div class="question-card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="count-pill">${cf.category}</span>
+                ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${cf.id}')">Löschen</button>` : ""}
+              </div>
+              <h3 style="margin-top:8px;">${cf.title}</h3>
+              <div class="formula-box">$$${cf.formula}$$</div>
+              ${cf.description ? `<h4 style="margin-bottom:4px;">Erklärung</h4><p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">${cf.description}</p>` : ""}
+              ${Array.isArray(cf.variables) && cf.variables.length > 0 ? `
+                <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
+                <table class="var-table" style="margin-bottom:16px;">
+                  <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
+                  <tbody>
+                    ${cf.variables.map(v => `
+                      <tr>
+                        <td class="var-sym">$${v.symbol}$</td>
+                        <td>${v.meaning}</td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              ` : ""}
+              <div class="form-grid-2">
+                <div><label style="font-size:12px; font-weight:600;">${cf.var1Label}</label><input type="number" id="cfv1-${cf.id}" class="input-field" value="${cf.var1Default}"></div>
+                <div><label style="font-size:12px; font-weight:600;">${cf.var2Label}</label><input type="number" id="cfv2-${cf.id}" class="input-field" value="${cf.var2Default}"></div>
+              </div>
+              <button class="btn-primary" onclick="runCustomFormulaCalc('${cf.id}')">Berechnen</button>
+              <div id="cfres-${cf.id}"></div>
+            </div>
+          `).join("")
+        }
+      `;
+    }
+
     function renderCalculatorContent() {
       if (activeCalcTab === "cutting") {
         return `
@@ -2044,6 +2447,7 @@
       const newFolder = { id: "f-" + Date.now(), name, questions: [] };
       sub.folders.push(newFolder);
       activeFolderId = newFolder.id;
+      selectedExamFolderKeys.add(`${sub.id}::${newFolder.id}`);
       saveSubjects();
       renderSidebar();
       renderView();
@@ -2060,6 +2464,7 @@
       if (!confirmed) return;
 
       sub.folders = sub.folders.filter(f => f.id !== folderId);
+      selectedExamFolderKeys.delete(`${sub.id}::${folderId}`);
       if (activeFolderId === folderId) {
         activeFolderId = sub.folders.length > 0 ? sub.folders[0].id : null;
       }
@@ -2138,7 +2543,7 @@
               <div style="width:44px; height:44px; border-radius:12px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">🎓</div>
               <div>
                 <h3 style="font-size:16px; margin-bottom:4px;">Eigene Prüfung starten</h3>
-                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Fragen aus deinen Fächern und Unterordnern üben.</p>
+                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Prüfung aus deinen freigeschalteten Fächern &amp; Unterordnern erstellen.</p>
                 <button class="btn-primary" onclick="navigate('custom-exam')">Prüfung starten →</button>
               </div>
             </div>
@@ -2515,42 +2920,7 @@
               <button class="btn-secondary" style="${activeCalcTab === 'quad' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='quad'; renderView();">📐 Quadratische Gleichung</button>
               <button class="btn-secondary" style="${activeCalcTab === 'ai-custom' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='ai-custom'; renderView();">🤖 KI-Formeln (${customFormulas.length})</button>
             </div>
-            ${activeCalcTab === 'ai-custom' ? `
-              ${customFormulas.length === 0
-                ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Noch keine KI-Formeln eingefügt. Nutze unten das Feld, um erstellten Formel-Code einzufügen.</p>`
-                : customFormulas.map(cf => `
-                  <div class="question-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                      <span class="count-pill">${cf.category}</span>
-                      ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${cf.id}')">Löschen</button>` : ""}
-                    </div>
-                    <h3 style="margin-top:8px;">${cf.title}</h3>
-                    <div class="formula-box">$$${cf.formula}$$</div>
-                    ${cf.description ? `<h4 style="margin-bottom:4px;">Erklärung</h4><p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">${cf.description}</p>` : ""}
-                    ${Array.isArray(cf.variables) && cf.variables.length > 0 ? `
-                      <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
-                      <table class="var-table" style="margin-bottom:16px;">
-                        <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
-                        <tbody>
-                          ${cf.variables.map(v => `
-                            <tr>
-                              <td class="var-sym">$${v.symbol}$</td>
-                              <td>${v.meaning}</td>
-                            </tr>
-                          `).join("")}
-                        </tbody>
-                      </table>
-                    ` : ""}
-                    <div class="form-grid-2">
-                      <div><label style="font-size:12px; font-weight:600;">${cf.var1Label}</label><input type="number" id="cfv1-${cf.id}" class="input-field" value="${cf.var1Default}"></div>
-                      <div><label style="font-size:12px; font-weight:600;">${cf.var2Label}</label><input type="number" id="cfv2-${cf.id}" class="input-field" value="${cf.var2Default}"></div>
-                    </div>
-                    <button class="btn-primary" onclick="runCustomFormulaCalc('${cf.id}')">Berechnen</button>
-                    <div id="cfres-${cf.id}"></div>
-                  </div>
-                `).join("")
-              }
-            ` : renderCalculatorContent()}
+            ${activeCalcTab === 'ai-custom' ? renderCustomFormulasTabContent() : renderCalculatorContent()}
 
             ${renderSpickzettelAbleitungenCard()}
 
@@ -2573,15 +2943,7 @@
       }
       else if (currentView === "custom-exam") {
         heading.innerText = "🎓 Eigene Prüfung";
-        const allQuestions = [];
-        visible.forEach(s => s.folders.forEach(f => f.questions.forEach(q => allQuestions.push({ ...q, subjectName: s.name, folderName: f.name }))));
-        container.innerHTML = `
-          <div class="card">
-            <h3 style="margin-bottom:4px;">Prüfungssimulation (${allQuestions.length} verfügbare Fragen)</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">Beantworte die Fragen aus allen für dich freigeschalteten Fächern.</p>
-            ${allQuestions.map((q, idx) => renderQuestionBlock(q, idx + 1, false)).join("")}
-          </div>
-        `;
+        container.innerHTML = renderCustomExamView(visible);
       }
       else if (currentView.startsWith("subject-")) {
         const subId = currentView.replace("subject-", "");
@@ -3093,6 +3455,7 @@
 
         saveCustomFormulas();
         activeCalcTab = "ai-custom";
+        activeFormulaCategoryFilter = "ALL";
         renderView();
       } catch (e) {
         fb.innerHTML = `<div class="result-banner result-err">Ungültiger Formel-Code: ${e.message}</div>`;
