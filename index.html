@@ -1043,7 +1043,7 @@
         if (Array.isArray(d.users) && d.users.length) {
           users = d.users;
           localStorage.setItem("lmg_users_v3", JSON.stringify(users));
-          const updatedMe = users.find(u => u.id === currentUser.id);
+          const updatedMe = users.find(u => u.id === currentUser?.id);
           if (updatedMe) currentUser = updatedMe;
         }
         if (Array.isArray(d.subjects) && d.subjects.length) {
@@ -1071,15 +1071,14 @@
           localStorage.setItem("lmg_formula_folders_v1", JSON.stringify(customFormulaFolders));
         }
 
-        isApplyingCloudState = false;
-
         if (!isLoginScreenVisible) {
           renderSidebar();
           renderView();
         }
       } catch (err) {
-        isApplyingCloudState = false;
         console.warn("Cloud-Load Hinweis:", err);
+      } finally {
+        isApplyingCloudState = false;
       }
     }
 
@@ -1523,9 +1522,9 @@
     /* ==========================================================
        EIGENE PRÜFUNG (AUTO-GENERIERUNG ÜBER ALLE UNTERORDNER)
        ========================================================== */
-    let examQuestionMode = "mix"; // "mix" | "mc" | "calc"
-    let examScopeKey = "ALL"; // "ALL" oder `${subId}::${folderId}`
-    let examLengthPreset = "10"; // "10" | "18" | "ALL" | "custom"
+    let examQuestionMode = "mix";
+    let examScopeKey = "ALL";
+    let examLengthPreset = "10";
     let customExamQuestionCount = 10;
     let masteredQuestionIds = new Set(JSON.parse(localStorage.getItem("lmg_mastered_q_v1") || "[]"));
     let activeExamSession = null;
@@ -1988,7 +1987,9 @@
       }
     }
 
-    function submitStandardLogin() {
+    async function submitStandardLogin() {
+      await loadFromCloud(false);
+
       const idVal = document.getElementById("loginIdentifierInput").value.trim().toLowerCase();
       const passVal = document.getElementById("loginPassInput").value.trim();
       const errBox = document.getElementById("loginErrorMsg");
@@ -2006,7 +2007,9 @@
       completeLoginForUser(found);
     }
 
-    function submitInviteLogin() {
+    async function submitInviteLogin() {
+      await loadFromCloud(false);
+
       const nameVal = document.getElementById("inviteNameInput").value.trim().toLowerCase();
       const codeVal = document.getElementById("inviteCodeInput").value.trim();
       const errBox = document.getElementById("inviteErrorMsg");
