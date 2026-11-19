@@ -100,6 +100,7 @@
     }
     .status-indicator { display: flex; align-items: center; gap: 8px; }
     .dot-green { width: 9px; height: 9px; border-radius: 50%; background: #10b981; display: inline-block; flex-shrink: 0; }
+    .dot-muted { width: 9px; height: 9px; border-radius: 50%; background: #64748b; display: inline-block; flex-shrink: 0; }
     .invite-pill-btn {
       background: #1e293b;
       color: #f8fafc;
@@ -779,15 +780,12 @@
   <div class="top-status-bar">
     <div class="top-status-row">
       <div class="status-indicator">
-        <span class="dot-green"></span>
-        <span id="statusUserText">Aktiv als <strong>Gerry (Admin)</strong> • Live-Sync aktiv</span>
+        <span id="statusDot" class="dot-muted"></span>
+        <span id="statusUserText">Abgemeldet • Bitte einloggen</span>
       </div>
       <div class="top-actions-right">
         <button class="invite-pill-btn home-pill" id="topBackHomeBtn" style="display:none;" onclick="goToStartseite()">
           🏠 Zurück zur Startseite
-        </button>
-        <button class="invite-pill-btn" id="topToggleScreenBtn" onclick="toggleLoginScreen()">
-          ← Zurück zur Plattform
         </button>
         <button class="invite-pill-btn logout-pill" id="topLogoutBtn" style="display:none;" onclick="logoutUser('manual')">
           🚪 Abmelden
@@ -814,11 +812,11 @@
       <div id="loginTabContent">
         <div class="login-form-group">
           <label class="login-label">Benutzername</label>
-          <input type="text" id="loginIdentifierInput" class="login-input" placeholder="Name">
+          <input type="text" id="loginIdentifierInput" class="login-input" placeholder="Name" onkeydown="if(event.key==='Enter'){event.preventDefault();submitStandardLogin();}">
         </div>
         <div class="login-form-group">
           <label class="login-label">Passwort</label>
-          <input type="password" id="loginPassInput" class="login-input" placeholder="••••••••••">
+          <input type="password" id="loginPassInput" class="login-input" placeholder="••••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();submitStandardLogin();}">
         </div>
         <div id="loginErrorMsg" style="color:#ef4444; font-size:12.5px; font-weight:600; margin-bottom:10px; display:none;"></div>
         <button class="login-submit-btn" onclick="submitStandardLogin()">Ins Lernportal einloggen →</button>
@@ -827,11 +825,11 @@
       <div id="inviteTabContent" style="display:none;">
         <div class="login-form-group">
           <label class="login-label">Dein Name (vom Admin zugewiesen)</label>
-          <input type="text" id="inviteNameInput" class="login-input" placeholder="z. B. Thomas M.">
+          <input type="text" id="inviteNameInput" class="login-input" placeholder="z. B. Thomas M." onkeydown="if(event.key==='Enter'){event.preventDefault();submitInviteLogin();}">
         </div>
         <div class="login-form-group">
           <label class="login-label">Initialpasswort / Invite-Code</label>
-          <input type="text" id="inviteCodeInput" class="login-input" placeholder="z. B. START-2026">
+          <input type="text" id="inviteCodeInput" class="login-input" placeholder="z. B. START-2026" onkeydown="if(event.key==='Enter'){event.preventDefault();submitInviteLogin();}">
         </div>
         <div id="inviteErrorMsg" style="color:#ef4444; font-size:12.5px; font-weight:600; margin-bottom:10px; display:none;"></div>
         <button class="login-submit-btn" onclick="submitInviteLogin()">Mit Initialpasswort anmelden →</button>
@@ -980,6 +978,7 @@
 
     const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuten
     let inactivityTimerId = null;
+    let isAuthenticated = false;
 
     function setLogoutBannerMessage(msg) {
       const banner = document.getElementById("sessionLogoutBanner");
@@ -1002,7 +1001,7 @@
 
     function resetInactivityTimer() {
       clearInactivityTimer();
-      if (!isLoginScreenVisible) {
+      if (isAuthenticated && !isLoginScreenVisible) {
         inactivityTimerId = setTimeout(() => {
           logoutUser("timeout");
         }, INACTIVITY_TIMEOUT_MS);
@@ -1011,6 +1010,7 @@
 
     function logoutUser(reason = "manual") {
       clearInactivityTimer();
+      isAuthenticated = false;
       activeExamSession = null;
       activeFolderId = null;
       activeChatPartnerId = null;
@@ -1023,15 +1023,15 @@
       if (reason === "timeout") {
         setLogoutBannerMessage("⏱️ Du wurdest nach 15 Minuten Inaktivität automatisch abgemeldet. Bitte melde dich erneut an.");
       } else {
-        setLogoutBannerMessage("🚪 Du wurdest abgemeldet.");
+        setLogoutBannerMessage("🚪 Du wurdest abgemeldet. Bitte melde dich erneut an, um das Portal zu nutzen.");
       }
 
-      toggleLoginScreen(false);
+      applyScreenVisibility();
     }
 
     ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "wheel"].forEach(evtName => {
       window.addEventListener(evtName, () => {
-        if (!isLoginScreenVisible) {
+        if (isAuthenticated && !isLoginScreenVisible) {
           resetInactivityTimer();
         }
       }, { passive: true });
@@ -1117,7 +1117,7 @@
           localStorage.setItem("lmg_formula_folders_v1", JSON.stringify(customFormulaFolders));
         }
 
-        if (!isLoginScreenVisible) {
+        if (isAuthenticated && !isLoginScreenVisible) {
           renderSidebar();
           renderView();
         }
@@ -1158,18 +1158,23 @@
     }
 
     function goToStartseite() {
-      toggleLoginScreen(true);
-      navigate("home");
+      if (!isAuthenticated) return;
+      isLoginScreenVisible = false;
+      currentView = "home";
+      applyScreenVisibility();
+      renderSidebar();
+      renderView();
     }
 
     function syncBackHomeButtons() {
-      const showBack = !isLoginScreenVisible && currentView !== "home";
+      const canUsePortal = isAuthenticated && !isLoginScreenVisible;
+      const showBack = canUsePortal && currentView !== "home";
       const topBtn = document.getElementById("topBackHomeBtn");
       const mainBtn = document.getElementById("mainBackHomeBtn");
       const logoutBtn = document.getElementById("topLogoutBtn");
       if (topBtn) topBtn.style.display = showBack ? "inline-flex" : "none";
       if (mainBtn) mainBtn.style.display = showBack ? "inline-flex" : "none";
-      if (logoutBtn) logoutBtn.style.display = !isLoginScreenVisible ? "inline-flex" : "none";
+      if (logoutBtn) logoutBtn.style.display = isAuthenticated ? "inline-flex" : "none";
     }
 
     const defaultUsers = [
@@ -2006,20 +2011,16 @@
       document.getElementById("inviteErrorMsg").style.display = "none";
     }
 
-    function toggleLoginScreen(forcePortal = null) {
-      if (forcePortal === true) isLoginScreenVisible = false;
-      else if (forcePortal === false) isLoginScreenVisible = true;
-      else isLoginScreenVisible = !isLoginScreenVisible;
+    function applyScreenVisibility() {
+      isLoginScreenVisible = !isAuthenticated;
 
       document.getElementById("loginScreen").style.display = isLoginScreenVisible ? "flex" : "none";
       document.getElementById("portalScreen").style.display = isLoginScreenVisible ? "none" : "flex";
-      document.getElementById("topToggleScreenBtn").innerText = isLoginScreenVisible
-        ? "← Zurück zur Plattform"
-        : "🔒 Startbildschirm / Login";
 
+      updateTopStatusBar();
       syncBackHomeButtons();
 
-      if (!isLoginScreenVisible) {
+      if (isAuthenticated && !isLoginScreenVisible) {
         setLogoutBannerMessage("");
         resetInactivityTimer();
         loadFromCloud(false);
@@ -2072,14 +2073,14 @@
 
     function completeLoginForUser(userObj) {
       currentUser = userObj;
+      isAuthenticated = true;
       currentView = "home";
       activeFolderId = null;
       activeChatPartnerId = null;
       activeExamSession = null;
       friendSearchQuery = "";
       setLogoutBannerMessage("");
-      updateTopStatusBar();
-      toggleLoginScreen(true);
+      applyScreenVisibility();
 
       if (currentUser.mustChangePassword) {
         document.getElementById("pwdModalUserName").innerText = currentUser.name;
@@ -2136,8 +2137,17 @@
     }
 
     function updateTopStatusBar() {
-      document.getElementById("statusUserText").innerHTML =
-        `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
+      const dot = document.getElementById("statusDot");
+      const txt = document.getElementById("statusUserText");
+      if (!isAuthenticated || !currentUser) {
+        if (dot) dot.className = "dot-muted";
+        if (txt) txt.innerHTML = `<strong>Abgemeldet</strong> • Bitte melde dich an`;
+        return;
+      }
+      if (dot) dot.className = "dot-green";
+      if (txt) {
+        txt.innerHTML = `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
+      }
     }
 
     function adminCreateUser() {
@@ -2204,7 +2214,7 @@
     function setTheme(theme) {
       document.documentElement.setAttribute("data-theme", theme);
       localStorage.setItem("lmg_theme", theme);
-      if (currentView === "settings" && !isLoginScreenVisible) renderView();
+      if (isAuthenticated && currentView === "settings" && !isLoginScreenVisible) renderView();
     }
 
     function setAccentColor(hex) {
@@ -2212,7 +2222,7 @@
       document.documentElement.style.setProperty("--accent-hover", hex);
       document.documentElement.style.setProperty("--accent-soft", hex + "1F");
       localStorage.setItem("lmg_accent", hex);
-      if (currentView === "settings" && !isLoginScreenVisible) renderView();
+      if (isAuthenticated && currentView === "settings" && !isLoginScreenVisible) renderView();
     }
 
     (function loadPreferences() {
@@ -2221,7 +2231,7 @@
     })();
 
     function isAdmin() {
-      return currentUser && String(currentUser.role).trim().toLowerCase() === "admin";
+      return isAuthenticated && currentUser && String(currentUser.role).trim().toLowerCase() === "admin";
     }
 
     function getVisibleSubjects() {
@@ -2230,6 +2240,7 @@
     }
 
     function renderSidebar() {
+      if (!isAuthenticated || !currentUser) return;
       document.getElementById("sidebarUserName").innerText = currentUser.name;
       document.getElementById("avatarInitials").innerText = currentUser.initials;
       document.getElementById("sidebarRoleBadge").innerText = currentUser.role;
@@ -2279,6 +2290,7 @@
     }
 
     function navigate(viewId, btnEl) {
+      if (!isAuthenticated) return;
       currentView = viewId;
       activeFolderId = null;
       activeExamSession = null;
@@ -2811,6 +2823,7 @@
     }
 
     function renderView() {
+      if (!isAuthenticated) return;
       syncBackHomeButtons();
       const container = document.getElementById("viewContainer");
       const heading = document.getElementById("pageHeading");
@@ -3574,7 +3587,7 @@
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
               <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
-              <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
+              <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', document.getElementById('ans-${q.id}').value, '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
             </div>
             <div id="fb-${q.id}"></div>
           </div>
@@ -3804,8 +3817,7 @@
       }
     }
 
-    updateTopStatusBar();
-    syncBackHomeButtons();
+    applyScreenVisibility();
     typesetMath();
     initCloudRealtime();
   </script>
