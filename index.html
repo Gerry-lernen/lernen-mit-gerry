@@ -1203,7 +1203,35 @@
     let isAuthenticated = false;
     let lastLocalImprintSavedAt = 0;
 
+    let calendarDraftForm = {
+      subject: null,
+      date: null,
+      title: "",
+      notes: ""
+    };
+
+    function snapshotCalendarDraft() {
+      const subEl = document.getElementById("newExamSubject");
+      const dateEl = document.getElementById("newExamDate");
+      const titleEl = document.getElementById("newExamTitle");
+      const notesEl = document.getElementById("newExamNotes");
+      if (subEl) calendarDraftForm.subject = subEl.value;
+      if (dateEl) calendarDraftForm.date = dateEl.value;
+      if (titleEl) calendarDraftForm.title = titleEl.value;
+      if (notesEl) calendarDraftForm.notes = notesEl.value;
+    }
+
     function isUserTypingInForm() {
+      if (currentView === "calendar" && (
+        calendarDraftForm.title.trim() !== "" ||
+        calendarDraftForm.notes.trim() !== "" ||
+        document.activeElement?.id === "newExamSubject" ||
+        document.activeElement?.id === "newExamDate" ||
+        document.activeElement?.id === "newExamTitle" ||
+        document.activeElement?.id === "newExamNotes"
+      )) {
+        return true;
+      }
       const active = document.activeElement;
       if (!active) return false;
       const tag = active.tagName ? active.tagName.toLowerCase() : "";
@@ -1305,6 +1333,7 @@
       activeExamSession = null;
       activeFolderId = null;
       activeChatPartnerId = null;
+      calendarDraftForm = { subject: null, date: null, title: "", notes: "" };
 
       const passInput = document.getElementById("loginPassInput");
       if (passInput) passInput.value = "";
@@ -1395,7 +1424,7 @@
           localStorage.setItem("lmg_subjects_v3", JSON.stringify(subjects));
         }
         if (Array.isArray(d.exams)) {
-          exams = d.exams;
+          exams = normalizeExamsList(d.exams, currentUser?.id || 1);
           localStorage.setItem("lmg_exams_v1", JSON.stringify(exams));
         }
         if (Array.isArray(d.friendships)) {
@@ -1880,9 +1909,10 @@
       if (!activeChatPartnerId) return;
       const sel = document.getElementById("chatExamSelect");
       const examId = sel ? sel.value : "";
-      const ex = exams.find(e => e.id === examId);
+      const myExams = getUserExams(currentUser.id);
+      const ex = myExams.find(e => e.id === examId);
       if (!ex) {
-        alert("Bitte wähle zuerst einen Termin aus deinem Kalender aus.");
+        alert("Bitte wähle zuerst einen Termin aus deinem eigenen Kalender aus.");
         return;
       }
 
@@ -1912,11 +1942,12 @@
 
     function shareFullCalendarInChat() {
       if (!activeChatPartnerId) return;
-      if (exams.length === 0) {
-        alert("Dein Prüfungskalender enthält aktuell keine Termine zum Teilen.");
+      const myExams = getUserExams(currentUser.id);
+      if (myExams.length === 0) {
+        alert("Dein persönlicher Prüfungskalender enthält aktuell keine Termine zum Teilen.");
         return;
       }
-      const sorted = [...exams].sort((a, b) => a.date.localeCompare(b.date));
+      const sorted = [...myExams].sort((a, b) => a.date.localeCompare(b.date));
       const now = new Date();
       const timeStr = now.toTimeString().slice(0, 5);
       chatMessages.push({
@@ -1946,18 +1977,20 @@
 
     function adoptSharedExam(msgId) {
       const msg = chatMessages.find(m => m.id === msgId);
-      if (!msg || !msg.examData) return;
+      if (!msg || !msg.examData || !currentUser) return;
 
-      const alreadyExists = exams.some(e =>
+      const myExams = getUserExams(currentUser.id);
+      const alreadyExists = myExams.some(e =>
         e.title === msg.examData.title && e.date === msg.examData.date
       );
       if (alreadyExists) {
-        alert("Dieser Prüfungstermin ist bereits in deinem Kalender gespeichert!");
+        alert("Dieser Prüfungstermin ist bereits in deinem persönlichen Kalender gespeichert!");
         return;
       }
 
       exams.push({
-        id: "ex-" + Date.now(),
+        id: "ex-" + currentUser.id + "-" + Date.now(),
+        userId: currentUser.id,
         subject: msg.examData.subject,
         title: msg.examData.title,
         date: msg.examData.date,
@@ -1966,19 +1999,21 @@
       exams.sort((a, b) => a.date.localeCompare(b.date));
       saveExams();
       renderSidebar();
-      alert(`✅ Termin „${msg.examData.title}“ (${msg.examData.date}) wurde in deinen Prüfungskalender übernommen!`);
+      alert(`✅ Termin „${msg.examData.title}“ (${msg.examData.date}) wurde in deinen persönlichen Kalender übernommen!`);
     }
 
     function adoptSharedCalendar(msgId) {
       const msg = chatMessages.find(m => m.id === msgId);
-      if (!msg || !msg.calendarShare || !Array.isArray(msg.calendarShare.items)) return;
+      if (!msg || !msg.calendarShare || !Array.isArray(msg.calendarShare.items) || !currentUser) return;
 
+      const myExams = getUserExams(currentUser.id);
       let added = 0;
       msg.calendarShare.items.forEach((item, idx) => {
-        const exists = exams.some(e => e.title === item.title && e.date === item.date);
+        const exists = myExams.some(e => e.title === item.title && e.date === item.date);
         if (!exists) {
           exams.push({
-            id: "ex-sh-" + Date.now() + "-" + idx,
+            id: "ex-sh-" + currentUser.id + "-" + Date.now() + "-" + idx,
+            userId: currentUser.id,
             subject: item.subject,
             title: item.title,
             date: item.date,
@@ -1990,22 +2025,39 @@
       exams.sort((a, b) => a.date.localeCompare(b.date));
       saveExams();
       renderSidebar();
-      alert(`📆 Kalender synchronisiert: ${added} neue(r) Termin(e) in deinen Kalender übernommen!`);
+      alert(`📆 Kalender synchronisiert: ${added} neue(r) Termin(e) in deinen persönlichen Kalender übernommen!`);
     }
 
-    function getDefaultExams() {
+    function getDefaultExamsForUser(userId = 1) {
       const addDays = (d) => {
         const dt = new Date();
         dt.setDate(dt.getDate() + d);
         return dt.toISOString().split("T")[0];
       };
       return [
-        { id: "ex-1", subject: "Fertigungstechnik", title: "FET Test 1 (Wärmebehandlung & Guss)", date: addDays(4), notes: "Kapitel 1–3 wiederholen" },
-        { id: "ex-2", subject: "Mathematik", title: "Schularbeit Differentialrechnung", date: addDays(14), notes: "Potenz-, Produkt- und Kettenregel" }
+        { id: `ex-${userId}-1`, userId, subject: "Fertigungstechnik", title: "FET Test 1 (Wärmebehandlung & Guss)", date: addDays(4), notes: "Kapitel 1–3 wiederholen" },
+        { id: `ex-${userId}-2`, userId, subject: "Mathematik", title: "Schularbeit Differentialrechnung", date: addDays(14), notes: "Potenz-, Produkt- und Kettenregel" }
       ];
     }
 
-    let exams = JSON.parse(localStorage.getItem("lmg_exams_v1")) || getDefaultExams();
+    function normalizeExamsList(rawList, fallbackUserId = 1) {
+      if (!Array.isArray(rawList)) return [];
+      return rawList.map(ex => ({
+        ...ex,
+        userId: ex.userId !== undefined && ex.userId !== null ? Number(ex.userId) : Number(fallbackUserId)
+      }));
+    }
+
+    let exams = normalizeExamsList(
+      JSON.parse(localStorage.getItem("lmg_exams_v1") || "null") || getDefaultExamsForUser(1),
+      1
+    );
+
+    function getUserExams(userId = currentUser?.id) {
+      if (!userId) return [];
+      return exams.filter(e => Number(e.userId) === Number(userId));
+    }
+
     function saveExams() {
       localStorage.setItem("lmg_exams_v1", JSON.stringify(exams));
       queueCloudSync();
@@ -2026,25 +2078,36 @@
     }
 
     function addExam() {
-      const subject = document.getElementById("newExamSubject").value.trim() || "Allgemein";
-      const title = document.getElementById("newExamTitle").value.trim();
-      const date = document.getElementById("newExamDate").value;
-      const notes = document.getElementById("newExamNotes").value.trim();
+      if (!isAuthenticated || !currentUser) return;
+      const subject = document.getElementById("newExamSubject")?.value.trim() || "Allgemein";
+      const title = document.getElementById("newExamTitle")?.value.trim() || "";
+      const date = document.getElementById("newExamDate")?.value || "";
+      const notes = document.getElementById("newExamNotes")?.value.trim() || "";
 
       if (!title || !date) {
         alert("Bitte Titel und Datum der Prüfung ausfüllen!");
         return;
       }
 
-      exams.push({ id: "ex-" + Date.now(), subject, title, date, notes });
+      exams.push({
+        id: "ex-" + currentUser.id + "-" + Date.now(),
+        userId: Number(currentUser.id),
+        subject,
+        title,
+        date,
+        notes
+      });
       exams.sort((a, b) => a.date.localeCompare(b.date));
+      calendarDraftForm = { subject, date, title: "", notes: "" };
       saveExams();
       renderSidebar();
       renderView();
     }
 
     function deleteExam(examId) {
-      exams = exams.filter(e => e.id !== examId);
+      if (!isAuthenticated || !currentUser) return;
+      snapshotCalendarDraft();
+      exams = exams.filter(e => !(e.id === examId && Number(e.userId) === Number(currentUser.id)));
       saveExams();
       renderSidebar();
       renderView();
@@ -2766,6 +2829,12 @@
     function completeLoginForUser(userObj) {
       currentUser = normalizeUserStreak(userObj);
       syncUserStreakOnLogin(currentUser);
+      exams = normalizeExamsList(exams, currentUser.id);
+      if (!exams.some(e => Number(e.userId) === Number(currentUser.id))) {
+        exams.push(...getDefaultExamsForUser(currentUser.id));
+        saveExams();
+      }
+      calendarDraftForm = { subject: null, date: null, title: "", notes: "" };
       isAuthenticated = true;
       currentView = "home";
       activeFolderId = null;
@@ -2940,8 +3009,9 @@
       const initials = (parts[0][0] + (parts[1] ? parts[1][0] : parts[0][1] || "")).toUpperCase();
       const generatedEmail = email || name.toLowerCase().replace(/[^a-z0-9]/g, "") + "@lernen-mit-gerry.at";
 
+      const newUserId = Date.now();
       users.push(normalizeUserStreak({
-        id: Date.now(),
+        id: newUserId,
         name,
         email: generatedEmail,
         role,
@@ -2953,8 +3023,10 @@
         lastActiveDate: null,
         learnedToday: false
       }));
+      exams.push(...getDefaultExamsForUser(newUserId));
 
       saveUsers();
+      saveExams();
       renderView();
     }
 
@@ -2993,7 +3065,9 @@
       if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
       if (userId === currentUser.id) return;
       users = users.filter(u => u.id !== userId);
+      exams = exams.filter(e => Number(e.userId) !== Number(userId));
       saveUsers();
+      saveExams();
       renderView();
     }
 
@@ -3045,7 +3119,8 @@
       document.getElementById("userPointsDisplay").textContent = currentUser.points + " Pkt 🏆";
       document.getElementById("headerPointsBadge").textContent = currentUser.points + " Pkt";
 
-      const upcomingExamsCount = exams.filter(e => getDaysUntil(e.date) >= 0).length;
+      const myExams = getUserExams(currentUser.id);
+      const upcomingExamsCount = myExams.filter(e => getDaysUntil(e.date) >= 0).length;
       document.getElementById("headerCalendarCount").textContent = upcomingExamsCount;
       document.getElementById("sidebarExamCount").textContent = upcomingExamsCount;
 
@@ -3113,6 +3188,7 @@
 
     function navigate(viewId, btnEl) {
       if (!isAuthenticated) return;
+      if (currentView === "calendar") snapshotCalendarDraft();
       currentView = viewId;
       activeFolderId = null;
       activeExamSession = null;
@@ -3778,11 +3854,12 @@
       const container = document.getElementById("viewContainer");
       const heading = document.getElementById("pageHeading");
       const visible = getVisibleSubjects();
+      const myExams = getUserExams(currentUser.id);
 
       if (currentView === "home") {
         heading.innerText = "🏠 Startseite";
         const favs = visible.filter(s => s.favorite);
-        const upcoming7Days = exams
+        const upcoming7Days = myExams
           .map(e => ({ ...e, diff: getDaysUntil(e.date) }))
           .filter(e => e.diff >= 0 && e.diff <= 7)
           .sort((a, b) => a.diff - b.diff);
@@ -3790,11 +3867,11 @@
         container.innerHTML = `
           <div class="exam-warning-card">
             <div class="exam-warning-top">
-              <strong>⏳ PRÜFUNGEN IN DEN NÄCHSTEN 7 TAGEN</strong>
+              <strong>⏳ DEINE PRÜFUNGEN IN DEN NÄCHSTEN 7 TAGEN</strong>
               <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="navigate('calendar')">📅 Kalender &amp; + Prüfung hinzufügen →</button>
             </div>
             ${upcoming7Days.length === 0
-              ? `<div style="font-size:13px; color:var(--warning-text);">Keine Prüfungen in den nächsten 7 Tagen eingetragen. Klicke auf den Kalender, um einen neuen Termin anzulegen.</div>`
+              ? `<div style="font-size:13px; color:var(--warning-text);">Keine persönlichen Prüfungen in den nächsten 7 Tagen eingetragen. Klicke auf den Kalender, um einen neuen Termin anzulegen.</div>`
               : upcoming7Days.map(ex => `
                 <div class="exam-item-box">
                   <div>
@@ -3981,7 +4058,7 @@
                       </div>
                     </div>
                     <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="shareFullCalendarInChat()">
-                      📆 Gesamten Kalender teilen (${exams.length})
+                      📆 Gesamten Kalender teilen (${myExams.length})
                     </button>
                   </div>
 
@@ -4024,12 +4101,12 @@
                   </div>
 
                   <div style="background:var(--bg-input); border:1px solid var(--border); border-radius:12px; padding:12px;">
-                    <div style="font-size:12.5px; font-weight:700; margin-bottom:6px;">📅 Einzelnen Prüfungstermin verschicken</div>
+                    <div style="font-size:12.5px; font-weight:700; margin-bottom:6px;">📅 Einzelnen Prüfungstermin aus deinem Kalender verschicken</div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                       <select id="chatExamSelect" class="select-field" style="margin:0; flex:1; min-width:200px;">
-                        ${exams.length === 0
-                          ? `<option value="">Keine Termine im Kalender vorhanden</option>`
-                          : exams.map(ex => `<option value="${escapeHtml(ex.id)}">${escapeHtml(ex.date)} – ${escapeHtml(ex.subject)}: ${escapeHtml(ex.title)}</option>`).join("")
+                        ${myExams.length === 0
+                          ? `<option value="">Keine Termine in deinem Kalender vorhanden</option>`
+                          : myExams.map(ex => `<option value="${escapeHtml(ex.id)}">${escapeHtml(ex.date)} – ${escapeHtml(ex.subject)}: ${escapeHtml(ex.title)}</option>`).join("")
                         }
                       </select>
                       <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="shareExamInChat()">📤 Termin senden</button>
@@ -4047,19 +4124,28 @@
       }
       else if (currentView === "calendar") {
         heading.innerText = "📅 Prüfungskalender";
-        const sortedExams = [...exams].sort((a, b) => a.date.localeCompare(b.date));
+        const sortedExams = [...myExams].sort((a, b) => a.date.localeCompare(b.date));
         const friends = getAcceptedFriends(currentUser.id);
         const defaultDate = new Date();
         defaultDate.setDate(defaultDate.getDate() + 7);
         const defaultDateStr = defaultDate.toISOString().split("T")[0];
 
+        const subjectOptions = [
+          ...subjects.map(s => s.name),
+          "Sonstiges"
+        ];
+        const selectedSubjectVal = (calendarDraftForm.subject && subjectOptions.includes(calendarDraftForm.subject))
+          ? calendarDraftForm.subject
+          : (subjectOptions[0] || "Sonstiges");
+        const selectedDateVal = calendarDraftForm.date || defaultDateStr;
+
         container.innerHTML = `
           <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
               <div>
-                <h3 style="margin-bottom:4px;">➕ Neue Prüfung / Schularbeit hinzufügen</h3>
+                <h3 style="margin-bottom:4px;">➕ Persönliche Prüfung / Schularbeit hinzufügen</h3>
                 <p style="font-size:13px; color:var(--text-muted);">
-                  Trage kommende Tests, Schularbeiten oder Abgaben ein. Termine innerhalb der nächsten 7 Tage erscheinen automatisch auf der Startseite.
+                  Dein Kalender gehört nur dir (${escapeHtml(currentUser.name)}), außer du teilst ihn im Chat mit Freunden. Termine in den nächsten 7 Tagen erscheinen auf deiner Startseite.
                 </p>
               </div>
               <button class="btn-secondary" onclick="navigate('chat')">💬 Kalender mit Freunden teilen (${friends.length})</button>
@@ -4067,31 +4153,31 @@
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Fach *</label>
-                <select id="newExamSubject" class="select-field">
-                  ${subjects.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.icon)} ${escapeHtml(s.name)}</option>`).join("")}
-                  <option value="Sonstiges">📚 Sonstiges</option>
+                <select id="newExamSubject" class="select-field" onchange="calendarDraftForm.subject = this.value;">
+                  ${subjects.map(s => `<option value="${escapeHtml(s.name)}" ${selectedSubjectVal === s.name ? 'selected' : ''}>${escapeHtml(s.icon)} ${escapeHtml(s.name)}</option>`).join("")}
+                  <option value="Sonstiges" ${selectedSubjectVal === "Sonstiges" ? 'selected' : ''}>📚 Sonstiges</option>
                 </select>
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Prüfungsdatum *</label>
-                <input type="date" id="newExamDate" class="input-field" value="${defaultDateStr}">
+                <input type="date" id="newExamDate" class="input-field" value="${escapeHtml(selectedDateVal)}" onchange="calendarDraftForm.date = this.value;">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Titel / Thema der Prüfung *</label>
-                <input type="text" id="newExamTitle" class="input-field" placeholder="z. B. 2. Schularbeit Differentialrechnung">
+                <input type="text" id="newExamTitle" class="input-field" value="${escapeHtml(calendarDraftForm.title)}" placeholder="z. B. 2. Schularbeit Differentialrechnung" oninput="calendarDraftForm.title = this.value;">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Notiz / Stoffgebiet (optional)</label>
-                <input type="text" id="newExamNotes" class="input-field" placeholder="z. B. Skript S. 12–45">
+                <input type="text" id="newExamNotes" class="input-field" value="${escapeHtml(calendarDraftForm.notes)}" placeholder="z. B. Skript S. 12–45" oninput="calendarDraftForm.notes = this.value;">
               </div>
             </div>
-            <button class="btn-primary" onclick="addExam()">📅 Prüfung in Kalender speichern</button>
+            <button class="btn-primary" onclick="addExam()">📅 Prüfung in meinen Kalender speichern</button>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:12px;">📋 Alle eingetragenen Prüfungstermine (${sortedExams.length})</h3>
+            <h3 style="margin-bottom:12px;">📋 Deine persönlichen Prüfungstermine (${sortedExams.length})</h3>
             ${sortedExams.length === 0
-              ? `<p style="font-size:13px; color:var(--text-muted);">Noch keine Prüfungen eingetragen.</p>`
+              ? `<p style="font-size:13px; color:var(--text-muted);">Noch keine persönlichen Prüfungen eingetragen.</p>`
               : sortedExams.map(ex => {
                   const diff = getDaysUntil(ex.date);
                   return `
@@ -4296,20 +4382,7 @@
                 <label style="font-size:13px; font-weight:600;">Lösungsweg / Erklärung (optional)</label>
                 <input type="text" id="newQExpl" class="input-field" placeholder="Kurze Erklärung für die Auswertung...">
 
-                <button class="btn-primary" onclick="addQuestionToFolder('${safeSubId}', '${escapeJsSingle(currentFolder.id)}')">💾 Frage im Unterordner speichern</button>
-
-                <div class="ai-code-box">
-                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div>
-                      <strong style="font-size:14px;">🤖 KI-Code für Fragen einfügen</strong>
-                      <div style="font-size:12px; color:var(--text-muted);">Füge hier einfach den von der KI erstellten Fragen-Code ein – den Rest erledigt das System.</div>
-                    </div>
-                    <button class="btn-secondary" onclick="copyAiPromptForFolder('${escapeJsSingle(sub.name)}', '${escapeJsSingle(currentFolder.name)}')">📋 KI-Prompt kopieren</button>
-                  </div>
-                  <textarea id="aiCodePasteArea" class="code-textarea" placeholder='[{"type":"mc","question":"Frage...","options":["A","B","C","D"],"correct":"A","explanation":"Erklärung"}]'></textarea>
-                  <button class="btn-primary" onclick="importAiQuestionsToFolder('${safeSubId}', '${escapeJsSingle(currentFolder.id)}')">⚡ Fragen-Code direkt einfügen</button>
-                  <div id="aiImportMsg"></div>
-                </div>
+                <button class="btn-primary" onclick="addQuestionToFolder('${safeSubId}', '${escapeJsSingle(currentFolder.id)}')">+ Frage speichern</button>
               </div>
               ` : ""}
             ` : ""}
@@ -4319,178 +4392,189 @@
       else if (currentView === "settings") {
         heading.innerText = "⚙️ Einstellungen & Passwort";
         const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-        const currentAccent = localStorage.getItem("lmg_accent") || "#2563eb";
-        const colors = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+        const currentAccent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+        const colors = ["#2563eb", "#4f46e5", "#10b981", "#f59e0b", "#e11d48", "#8b5cf6"];
 
         container.innerHTML = `
           <div class="card">
-            <h3 style="margin-bottom:4px;">Darstellung &amp; Design</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Passe Design und Akzentfarbe an deinen Geschmack an.</p>
-            <div class="setting-row">
-              <div><strong>Farbmodus</strong><div style="font-size:12px; color:var(--text-muted);">Zwischen hellem und dunklem Design wechseln</div></div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('light')">☀️ Hell</button>
-                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('dark')">🌙 Dunkel</button>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div><strong>Akzentfarbe</strong><div style="font-size:12px; color:var(--text-muted);">Buttons, aktive Menüs und Highlights</div></div>
-              <div style="display:flex; gap:10px; align-items:center;">
-                ${colors.map(c => `<div class="swatch ${currentAccent === c ? 'active' : ''}" style="background:${c};" onclick="setAccentColor('${c}')"></div>`).join("")}
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-bottom:4px;">🔐 Eigenes Passwort ändern</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Angemeldet als <strong>${escapeHtml(currentUser.name)}</strong> (${escapeHtml(currentUser.email)})</p>
+            <h3 style="margin-bottom:4px;">🔑 Mein Passwort ändern</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Eingeloggt als <strong>${escapeHtml(currentUser.name)}</strong> (${escapeHtml(currentUser.email)}).</p>
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Neues Passwort (mind. 4 Zeichen)</label>
                 <input type="password" id="settingsNewPwd1" class="input-field" placeholder="Neues Passwort...">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Neues Passwort bestätigen</label>
-                <input type="password" id="settingsNewPwd2" class="input-field" placeholder="Wiederholen...">
+                <label style="font-size:13px; font-weight:600;">Neues Passwort wiederholen</label>
+                <input type="password" id="settingsNewPwd2" class="input-field" placeholder="Passwort bestätigen...">
               </div>
             </div>
             <button class="btn-primary" onclick="changeOwnPasswordFromSettings()">Passwort aktualisieren</button>
             <div id="settingsPwdMsg"></div>
           </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:12px;">Darstellung &amp; Design</h3>
+            <div class="setting-row">
+              <div><strong>Farbmodus</strong><div style="font-size:13px; color:var(--text-muted);">Zwischen hellem und dunklem Design wechseln</div></div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('light')">☀️ Hell</button>
+                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('dark')">🌙 Dunkel</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div><strong>Akzentfarbe</strong><div style="font-size:13px; color:var(--text-muted);">Buttons, aktive Menüs und Highlights</div></div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                ${colors.map(c => `<button class="swatch ${currentAccent.toLowerCase() === c ? 'active' : ''}" style="background:${c};" onclick="setAccentColor('${c}')"></button>`).join("")}
+              </div>
+            </div>
+          </div>
         `;
       }
       else if (currentView === "admin") {
-        if (!isAdmin()) {
-          container.innerHTML = `<div class="card"><h3>Zugriff verweigert</h3><p>Nur Admins haben Zugriff auf diesen Bereich.</p></div>`;
-          return;
-        }
-        heading.innerText = "🛡️ Admin (Benutzer & Kurse)";
+        if (!isAdmin()) return;
+        heading.innerText = "🛡️ Admin (Benutzer, Rollen & Kurse)";
         const editingSub = subjects.find(s => s.id === editingSubjectId);
-        const availableRoles = getAllAvailableRoles();
+        const allRoles = getAllAvailableRoles();
 
         container.innerHTML = `
           <div class="card">
             <h3 style="margin-bottom:4px;">➕ Neues Unterrichtsfach anlegen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Erstellt ein neues Fach mit eigenem Start-Unterordner und blendet es sofort in der Seitenleiste sowie in der Kurs- &amp; Rechteverwaltung ein.
+              Erstellt ein neues Unterrichtsfach inklusive erstem Unterordner und schaltet es sofort im Menü sowie für Prüfungen frei.
             </p>
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Fachname *</label>
-                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Konstruktionslehre oder Chemie" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
+                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Thermodynamik" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Icon / Emoji</label>
-                <input type="text" id="newSubjectIconInput" class="input-field" value="📘" maxlength="6">
+                <label style="font-size:13px; font-weight:600;">Symbol / Emoji</label>
+                <input type="text" id="newSubjectIconInput" class="input-field" value="📘" placeholder="z. B. 🔥 oder 📐">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Bereich / Kategorie</label>
+                <label style="font-size:13px; font-weight:600;">Kategorie</label>
                 <select id="newSubjectCategoryInput" class="select-field">
                   <option value="TECHNIK">TECHNIK</option>
                   <option value="HAUPTFACH">HAUPTFACH</option>
                   <option value="MATURA">MATURA</option>
-                  <option value="SONSTIGES">SONSTIGES</option>
+                  <option value="ALLGEMEIN">ALLGEMEIN</option>
                 </select>
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Erster Unterordner</label>
-                <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen">
+                <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen" placeholder="Name des ersten Ordners">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Markierungsfarbe</label>
+                <label style="font-size:13px; font-weight:600;">Farbe</label>
                 <input type="color" id="newSubjectColorInput" class="input-field" style="height:42px; padding:4px;" value="#2563eb">
               </div>
-              <div style="display:flex; align-items:center; padding-top:16px;">
-                <label class="user-check-label" style="width:100%;">
+              <div style="display:flex; align-items:center; padding-top:14px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13.5px; font-weight:600;">
                   <input type="checkbox" id="newSubjectAccessAllInput" checked>
-                  <span>Sofort für alle Benutzer freischalten</span>
+                  Für alle Benutzer freischalten
                 </label>
               </div>
             </div>
-            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach erstellen</button>
+            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Fach erstellen</button>
             <div id="newSubjectFeedback"></div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">🎭 Rollen &amp; Berechtigungen verwalten</h3>
+            <h3 style="margin-bottom:4px;">🏷️ Rollen verwalten &amp; eigene Rollen erstellen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Lege eigene Rollen an (z. B. <em>Tutor</em>, <em>Gast</em>, <em>Teamleiter</em>), lege fest, ob sie Admin-Rechte besitzen, und weise sie Benutzern zu.
+              Neben <strong>Schüler</strong>, <strong>Lehrer</strong> und <strong>Admin</strong> kannst du beliebige eigene Rollen anlegen, umbenennen und löschen.
             </p>
 
             <div class="form-grid-2" style="align-items:end;">
               <div>
-                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle *</label>
-                <input type="text" id="adminNewRoleName" class="input-field" placeholder="z. B. Tutor oder Gast" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
+                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle</label>
+                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor, Co-Admin oder Gast" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
               </div>
-              <div>
-                <label class="user-check-label" style="margin-bottom:12px;">
+              <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding-bottom:4px;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; cursor:pointer;">
                   <input type="checkbox" id="adminNewRoleIsAdmin">
-                  <span>Admin-Rechte gewähren (Benutzer, Kurse &amp; Inhalte verwalten)</span>
+                  Admin-Rechte gewähren
                 </label>
+                <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Rolle anlegen</button>
               </div>
             </div>
-            <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Eigene Rolle speichern</button>
 
-            <div style="margin-top:16px;">
-              ${availableRoles.map(r => `
-                <div class="setting-row">
-                  <div>
-                    <strong>${escapeHtml(r.name)}</strong>
-                    <span class="role-badge" style="margin-left:6px;">${r.isAdminRole ? "Admin-Rechte" : "Standard-Rechte"}</span>
-                    <span class="count-pill" style="margin-left:6px;">${r.builtIn ? "Systemrolle" : "Eigene Rolle"}</span>
-                  </div>
-                  ${!r.builtIn ? `
-                    <div style="display:flex; gap:8px;">
-                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminRenameCustomRole('${escapeJsSingle(r.name)}')">Umbenennen</button>
-                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${escapeJsSingle(r.name)}')">Löschen</button>
+            <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+              <strong style="font-size:13px;">Vorhandene Rollen (${allRoles.length}):</strong>
+              <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+                ${allRoles.map(r => {
+                  const safeRName = escapeJsSingle(r.name);
+                  return `
+                    <div class="setting-row" style="padding:10px 12px; background:var(--bg-input); border-radius:10px; border-bottom:none;">
+                      <div>
+                        <strong>${escapeHtml(r.name)}</strong>
+                        ${r.builtIn ? `<span class="count-pill" style="margin-left:6px;">Standard</span>` : `<span class="count-pill" style="margin-left:6px;">Eigene Rolle</span>`}
+                        ${r.isAdminRole ? `<span class="role-badge" style="margin-left:6px;">Admin-Rechte</span>` : ""}
+                      </div>
+                      ${!r.builtIn ? `
+                        <div style="display:flex; gap:8px;">
+                          <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="adminRenameCustomRole('${safeRName}')">✏️ Umbenennen</button>
+                          <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${safeRName}')">Löschen</button>
+                        </div>
+                      ` : `<span style="font-size:12px; color:var(--text-muted);">Systemrolle</span>`}
                     </div>
-                  ` : `<span style="font-size:12px; color:var(--text-muted);">Fest integriert</span>`}
-                </div>
-              `).join("")}
+                  `;
+                }).join("")}
+              </div>
             </div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">👤 Neuen Benutzer anlegen &amp; Initialpasswort vergeben</h3>
+            <h3 style="margin-bottom:4px;">👥 Benutzer &amp; Initialpasswörter verwalten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Der Benutzer loggt sich mit seinem Namen/E-Mail und dem Initialpasswort ein und wird beim ersten Start aufgefordert, ein eigenes Passwort zu vergeben.
+              Lege neue Benutzer mit einem Initialpasswort an (oder setze bestehende Passwörter zurück). Beim ersten Login wird der Benutzer aufgefordert, ein eigenes Passwort zu vergeben.
             </p>
+
             <div class="form-grid-2">
               <div>
-                <label style="font-size:13px; font-weight:600;">Name *</label>
-                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna M.">
+                <label style="font-size:13px; font-weight:600;">Name des Benutzers</label>
+                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna Huber">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
                 <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@lernen-mit-gerry.at">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code *</label>
+                <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code</label>
                 <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Rolle</label>
                 <select id="adminNewUserRole" class="select-field">
-                  ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join("")}
+                  ${allRoles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}${r.isAdminRole ? " (Admin)" : ""}</option>`).join("")}
                 </select>
               </div>
             </div>
-            <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer anlegen</button>
+            <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer mit Initialpasswort anlegen</button>
 
             <div style="margin-top:20px;">
-              <h4 style="margin-bottom:8px;">Vorhandene Benutzer (${users.length})</h4>
               ${users.map(u => `
                 <div class="setting-row">
                   <div>
-                    <strong>${escapeHtml(u.name)}</strong> <span class="role-badge">${escapeHtml(u.role)}</span>
-                    <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(u.email)} • ${Number(u.points) || 0} Pkt • ${Number(u.streak) || 0}d 🔥 • ${u.mustChangePassword ? '⏳ Muss Passwort ändern' : '✅ Eigenes Passwort aktiv'}</div>
+                    <strong>${escapeHtml(u.name)}</strong>
+                    <span class="role-badge">${escapeHtml(u.role)}</span>
+                    <span class="count-pill" style="margin-left:4px;">${u.points || 0} Pkt</span>
+                    <span class="count-pill" style="margin-left:4px;">${u.streak || 0}d 🔥</span>
+                    <div style="font-size:12px; color:var(--text-muted);">
+                      ${escapeHtml(u.email)} • Status:
+                      ${u.mustChangePassword
+                        ? `<strong style="color:#d97706;">Initialpasswort aktiv (${escapeHtml(u.password)})</strong>`
+                        : `<span style="color:#10b981;">Eigenes Passwort gesetzt</span>`
+                      }
+                    </div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                     <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${Number(u.id)}, this.value)">
-                      ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join("")}
+                      ${allRoles.map(r => `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? "selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}
                     </select>
-                    <button class="btn-secondary" onclick="adminResetUserPassword(${Number(u.id)})">🔑 Initialpasswort setzen</button>
-                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${Number(u.id)})">Löschen</button>` : `<span style="font-size:12px; color:var(--text-muted);">Aktiv</span>`}
+                    <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${Number(u.id)})">🔑 Init-PW setzen</button>
+                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${Number(u.id)})">Löschen</button>` : `<span style="font-size:12px; color:var(--text-muted);">Aktueller Admin</span>`}
                   </div>
                 </div>
               `).join("")}
@@ -4499,17 +4583,17 @@
 
           <div class="card">
             <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachberechtigungen</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Lege fest, welche Benutzer Zugriff auf welche Fächer haben oder lösche nicht mehr benötigte Fächer.</p>
-            ${subjects.map(sub => {
-              const safeSubId = escapeJsSingle(sub.id);
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lege fest, welche Benutzer Zugriff auf welches Unterrichtsfach haben oder entferne angelegte Fächer.</p>
+            ${subjects.map(s => {
+              const safeSubId = escapeJsSingle(s.id);
               return `
                 <div class="setting-row">
                   <div>
-                    <strong>${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</strong>
-                    <div style="font-size:12px; color:var(--text-muted);">${sub.accessAll ? '🌍 Alle Benutzer' : `🔒 Ausgewählte Benutzer (${sub.allowedUsers.length})`}</div>
+                    <strong>${escapeHtml(s.icon)} ${escapeHtml(s.name)}</strong>
+                    <div style="font-size:12px; color:var(--text-muted);">${s.accessAll ? "Alle Benutzer haben Zugriff" : `Eingeschränkt (${s.allowedUsers.length} Benutzer)`}</div>
                   </div>
                   <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button class="btn-secondary" onclick="openAccessModal('${safeSubId}')">Berechtigungen bearbeiten</button>
+                    <button class="btn-secondary" onclick="openSubjectPermissions('${safeSubId}')">Berechtigungen bearbeiten</button>
                     <button class="btn-danger" onclick="adminDeleteSubject('${safeSubId}')">Fach löschen</button>
                   </div>
                 </div>
@@ -4517,22 +4601,22 @@
             }).join("")}
 
             ${editingSub ? `
-              <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-                <h4>Zugriff für: ${escapeHtml(editingSub.icon)} ${escapeHtml(editingSub.name)}</h4>
-                <label class="user-check-label" style="margin-top:10px; background:var(--accent-soft); border-color:var(--accent);">
-                  <input type="checkbox" id="modalAccessAll" ${editingSub.accessAll ? 'checked' : ''} onchange="toggleUserGridDisabled()">
-                  <strong>Für ALLE Benutzer freischalten</strong>
+              <div style="margin-top:16px; padding:16px; background:var(--bg-input); border-radius:12px; border:1px solid var(--accent);">
+                <h4 style="margin-bottom:8px;">Berechtigungen für: ${escapeHtml(editingSub.icon)} ${escapeHtml(editingSub.name)}</h4>
+                <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer;">
+                  <input type="checkbox" id="permAccessAll" ${editingSub.accessAll ? "checked" : ""} onchange="togglePermUserGrid()">
+                  Alle Benutzer dürfen dieses Fach sehen
                 </label>
-                <div class="user-checkbox-grid" id="modalUserGrid">
+                <div id="permUserGrid" class="user-checkbox-grid" style="${editingSub.accessAll ? "display:none;" : ""}">
                   ${users.map(u => `
                     <label class="user-check-label">
-                      <input type="checkbox" value="${Number(u.id)}" ${tempSelectedUsers.has(u.id) ? 'checked' : ''} onchange="toggleTempUser(${Number(u.id)}, this.checked)">
-                      <span>${escapeHtml(u.name)}</span>
+                      <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleTempUser(${Number(u.id)})">
+                      <span>${escapeHtml(u.name)} (${escapeHtml(u.role)})</span>
                     </label>
                   `).join("")}
                 </div>
-                <div style="display:flex; gap:10px; margin-top:14px;">
-                  <button class="btn-primary" onclick="saveSubjectAccess()">Speichern</button>
+                <div style="margin-top:14px; display:flex; gap:8px;">
+                  <button class="btn-primary" onclick="saveSubjectPermissions()">Speichern</button>
                   <button class="btn-secondary" onclick="editingSubjectId = null; renderView();">Abbrechen</button>
                 </div>
               </div>
@@ -4542,8 +4626,9 @@
           <div class="card">
             <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Pflege die Angaben für die Seite <strong>Impressum</strong>. Änderungen werden lokal gespeichert und mit der Cloud synchronisiert.
+              Pflege hier die Angaben für das Impressum – Änderungen werden sofort gespeichert und synchronisiert.
             </p>
+
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Betreiber / Projektname</label>
@@ -4554,17 +4639,18 @@
                 <input type="text" id="adminImpEmail" class="input-field" value="${escapeHtml(imprintData.email || "")}">
               </div>
             </div>
+
             <label style="font-size:13px; font-weight:600;">Standort / Anschrift</label>
             <input type="text" id="adminImpAddress" class="input-field" value="${escapeHtml(imprintData.address || "")}">
 
-            <label style="font-size:13px; font-weight:600;">Zweck des Lernportals</label>
-            <textarea id="adminImpRole" class="textarea-field">${escapeHtml(imprintData.websiteRole || "")}</textarea>
+            <label style="font-size:13px; font-weight:600;">Zweck des Angebots</label>
+            <textarea id="adminImpRole" class="textarea-field" style="min-height:70px;">${escapeHtml(imprintData.websiteRole || "")}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
-            <textarea id="adminImpDisclaimer" class="textarea-field">${escapeHtml(imprintData.disclaimer || "")}</textarea>
+            <textarea id="adminImpDisclaimer" class="textarea-field" style="min-height:75px;">${escapeHtml(imprintData.disclaimer || "")}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Datenschutzhinweis</label>
-            <textarea id="adminImpPrivacy" class="textarea-field">${escapeHtml(imprintData.privacyNote || "")}</textarea>
+            <textarea id="adminImpPrivacy" class="textarea-field" style="min-height:75px;">${escapeHtml(imprintData.privacyNote || "")}</textarea>
 
             <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
             <div id="adminImprintSavedMsg"></div>
@@ -4575,21 +4661,20 @@
       typesetMath(container);
     }
 
-    function renderQuestionBlock(q, index, canDelete, subId, folderId) {
+    function renderQuestionBlock(q, num, canEdit, subId, folderId) {
       const safeQId = escapeJsSingle(q.id);
-      const domQId = escapeHtml(q.id);
       const safeExpl = escapeJsSingle(q.explanation);
-      const delBtn = canDelete
-        ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${escapeJsSingle(subId)}', '${escapeJsSingle(folderId)}', '${safeQId}')">Löschen</button>`
-        : "";
+      const safeSubId = escapeJsSingle(subId);
+      const safeFolderId = escapeJsSingle(folderId);
+      const deleteBtn = canEdit ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${safeSubId}', '${safeFolderId}', '${safeQId}')">Löschen</button>` : "";
 
       if (q.type === "mc") {
         const safeCorr = escapeJsSingle(q.correct);
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-              <div style="font-weight:700; font-size:15px;">${index}. ${escapeHtml(q.question)}</div>
-              ${delBtn}
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div style="font-weight:700; font-size:15px;">${num}. ${escapeHtml(q.question)}</div>
+              ${deleteBtn}
             </div>
             <div style="margin-top:8px;">
               ${q.options.map(opt => `
@@ -4598,23 +4683,23 @@
                 </div>
               `).join("")}
             </div>
-            <div id="fb-${domQId}"></div>
+            <div id="fb-${escapeHtml(q.id)}"></div>
           </div>
         `;
       } else {
         const safeAns = escapeJsSingle(q.answer);
-        const inputId = `ans-${domQId}`;
+        const inputId = `ans-${escapeHtml(q.id)}`;
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-              <div style="font-weight:700; font-size:15px;">${index}. ${escapeHtml(q.question)}</div>
-              ${delBtn}
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div style="font-weight:700; font-size:15px;">${num}. ${escapeHtml(q.question)}</div>
+              ${deleteBtn}
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
-              <input type="text" id="${inputId}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
-              <button class="btn-primary" onclick="checkFolderQuestion('${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeAns}', '${safeExpl}')">Prüfen</button>
+              <input type="text" id="${inputId}" class="input-field" style="margin:0;" placeholder="Ergebnis eingeben...">
+              <button class="btn-primary" onclick="checkFolderQuestion('${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeExpl}')">Prüfen</button>
             </div>
-            <div id="fb-${domQId}"></div>
+            <div id="fb-${escapeHtml(q.id)}"></div>
           </div>
         `;
       }
@@ -4626,216 +4711,118 @@
       document.getElementById("calcFieldsBox").style.display = type === "calc" ? "block" : "none";
     }
 
-    function copyAiPromptForFolder(subName, folderName) {
-      const promptText = `Erstelle 5 Lernfragen für das Fach "${subName}" und den Unterordner "${folderName}". Gib ausschließlich gültiges JSON ohne Markdown-Codeblöcke in diesem exakten Format zurück:\n[{"type":"mc","question":"Fragetext","options":["Opt 1","Opt 2","Opt 3","Opt 4"],"correct":"Opt 1","explanation":"Kurze Erklärung"},{"type":"calc","question":"Rechenfrage","answer":"42","explanation":"Lösungsweg"}]`;
-      navigator.clipboard?.writeText(promptText).then(() => {
-        alert("KI-Prompt kopiert! Füge ihn jetzt in deine KI ein und kopiere das Ergebnis zurück in das Feld darunter.");
-      }).catch(() => {
-        prompt("Kopiere diesen Prompt:", promptText);
-      });
-    }
-
-    function importAiQuestionsToFolder(subId, folderId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
-      const raw = document.getElementById("aiCodePasteArea").value.trim();
-      const msgBox = document.getElementById("aiImportMsg");
-      if (!raw) {
-        msgBox.innerHTML = `<div class="result-banner result-err">Bitte zuerst den KI-Code in das Textfeld einfügen.</div>`;
-        return;
-      }
-
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-      let parsed;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch (e) {
-        msgBox.innerHTML = `<div class="result-banner result-err">Ungültiges JSON-Format: ${escapeHtml(e.message)}</div>`;
-        return;
-      }
-
-      const items = Array.isArray(parsed) ? parsed : [parsed];
+    function openSubjectPermissions(subId) {
+      if (!isAdmin()) return;
+      editingSubjectId = subId;
       const sub = subjects.find(s => s.id === subId);
-      const folder = sub?.folders.find(f => f.id === folderId);
-      if (!folder) return;
-
-      let added = 0;
-      items.forEach((item, idx) => {
-        if (!item || typeof item !== "object" || !item.question) return;
-        const explanation = String(item.explanation || "Keine Erklärung hinterlegt.");
-        if (item.type === "mc" && Array.isArray(item.options) && item.options.length >= 2) {
-          const opts = item.options.map(String).filter(Boolean);
-          const corr = opts.includes(String(item.correct)) ? String(item.correct) : opts[0];
-          folder.questions.push({
-            id: "q-ai-" + Date.now() + "-" + idx,
-            type: "mc",
-            question: String(item.question),
-            options: opts,
-            correct: corr,
-            explanation
-          });
-          added++;
-        } else if (item.answer !== undefined && String(item.answer).trim() !== "") {
-          folder.questions.push({
-            id: "q-ai-" + Date.now() + "-" + idx,
-            type: "calc",
-            question: String(item.question),
-            answer: String(item.answer).trim(),
-            explanation
-          });
-          added++;
-        }
-      });
-
-      if (added === 0) {
-        msgBox.innerHTML = `<div class="result-banner result-err">Keine gültigen Fragen im Code erkannt.</div>`;
-        return;
-      }
-
+      tempSelectedUsers = new Set(sub.allowedUsers || []);
+      renderView();
+    }
+    function togglePermUserGrid() {
+      const checked = document.getElementById("permAccessAll").checked;
+      document.getElementById("permUserGrid").style.display = checked ? "none" : "grid";
+    }
+    function toggleTempUser(uid) {
+      if (tempSelectedUsers.has(uid)) tempSelectedUsers.delete(uid);
+      else tempSelectedUsers.add(uid);
+    }
+    function saveSubjectPermissions() {
+      if (!isAdmin()) return;
+      const sub = subjects.find(s => s.id === editingSubjectId);
+      if (!sub) return;
+      sub.accessAll = document.getElementById("permAccessAll").checked;
+      sub.allowedUsers = Array.from(tempSelectedUsers);
       saveSubjects();
+      editingSubjectId = null;
       renderSidebar();
       renderView();
-      const afterBox = document.getElementById("aiImportMsg");
-      if (afterBox) {
-        afterBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${escapeHtml(folder.name)}“ eingefügt!</div>`;
-      }
     }
 
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1") || "[]");
+    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
     function saveCustomFormulas() {
       localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
       queueCloudSync();
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine technische oder mathematische Formel für meinen Rechner. Gib ausschließlich gültiges JSON ohne Markdown-Codeblöcke in diesem exakten Format zurück:\n{"title":"Titel der Formel","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Kurze, klare Erklärung der Formel.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}`;
+      const promptText = `Erstelle mir exakt ein JSON-Objekt für mein Lernportal "Lernen mit Gerry" im folgenden Format (ohne Markdown-Codeblöcke, nur reines JSON):\n{\n  "title": "Name der Formel",\n  "category": "Fachbereich (z. B. Mechanik, Elektrotechnik, Mathe)",\n  "formula": "LaTeX-Formel ohne $$",\n  "description": "Kurze, klare Erklärung wofür man die Formel verwendet",\n  "variables": [\n    { "symbol": "F", "meaning": "Kraft in Newton (N)" },\n    { "symbol": "A", "meaning": "Fläche in Quadratmetern (m²)" }\n  ],\n  "var1Label": "Label für Variable 1 [Einheit]",\n  "var1Default": 100,\n  "var2Label": "Label für Variable 2 [Einheit]",\n  "var2Default": 10,\n  "formulaType": "mul"\n}\nErlaubte formulaType-Werte: "mul" (var1 * var2), "div" (var1 / var2), "add" (var1 + var2), "sub" (var1 - var2).`;
       navigator.clipboard?.writeText(promptText).then(() => {
-        alert("Formel-Prompt kopiert!");
+        alert("Formel-Prompt in die Zwischenablage kopiert! Füge ihn jetzt in die KI ein.");
       }).catch(() => {
-        prompt("Kopiere diesen Prompt:", promptText);
+        prompt("Kopiere diesen Prompt für die KI:", promptText);
       });
     }
 
     function importAiFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln hinzufügen.");
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln importieren.");
       const raw = document.getElementById("aiFormulaCodeArea").value.trim();
       const msgBox = document.getElementById("aiFormulaMsg");
-      if (!raw) {
-        msgBox.innerHTML = `<div class="result-banner result-err">Bitte zuerst den KI-Formel-Code einfügen.</div>`;
-        return;
-      }
+      if (!raw) return;
 
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-      let parsed;
       try {
-        parsed = JSON.parse(cleaned);
-      } catch (e) {
-        msgBox.innerHTML = `<div class="result-banner result-err">Ungültiges JSON-Format: ${escapeHtml(e.message)}</div>`;
-        return;
-      }
+        const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+        const parsed = JSON.parse(cleaned);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
 
-      const list = Array.isArray(parsed) ? parsed : [parsed];
-      let added = 0;
-      list.forEach((f, idx) => {
-        if (!f || typeof f !== "object" || !f.title || !f.formula) return;
-        const safeVars = Array.isArray(f.variables)
-          ? f.variables.filter(v => v && v.symbol && v.meaning).map(v => ({ symbol: String(v.symbol), meaning: String(v.meaning) }))
-          : [];
-        customFormulas.push({
-          id: "cf-" + Date.now() + "-" + idx,
-          title: String(f.title),
-          category: String(f.category || "KI-Formel"),
-          formula: String(f.formula),
-          description: String(f.description || ""),
-          variables: safeVars,
-          var1Label: String(f.var1Label || "Wert 1"),
-          var1Default: Number(f.var1Default) || 10,
-          var2Label: String(f.var2Label || "Wert 2"),
-          var2Default: Number(f.var2Default) || 2,
-          formulaType: ["mul", "div", "add", "sub"].includes(f.formulaType) ? f.formulaType : "mul"
+        let added = 0;
+        list.forEach((item, idx) => {
+          if (!item.title || !item.formula) return;
+          const cleanCat = String(item.category || "KI-Formel").trim();
+          if (cleanCat && !customFormulaFolders.some(ff => ff.name.toLowerCase() === cleanCat.toLowerCase())) {
+            customFormulaFolders.push({
+              id: "ff-" + Date.now() + "-" + idx,
+              name: cleanCat
+            });
+          }
+          customFormulas.push({
+            id: "cf-" + Date.now() + "-" + idx,
+            title: String(item.title),
+            category: cleanCat || "KI-Formel",
+            formula: String(item.formula),
+            description: String(item.description || ""),
+            variables: Array.isArray(item.variables) ? item.variables : [],
+            var1Label: String(item.var1Label || "Wert 1"),
+            var1Default: Number(item.var1Default ?? 10),
+            var2Label: String(item.var2Label || "Wert 2"),
+            var2Default: Number(item.var2Default ?? 2),
+            formulaType: ["mul", "div", "add", "sub"].includes(item.formulaType) ? item.formulaType : "mul"
+          });
+          added++;
         });
-        added++;
-      });
 
-      if (added === 0) {
-        msgBox.innerHTML = `<div class="result-banner result-err">Keine gültige Formel erkannt (benötigt "title" und "formula").</div>`;
-        return;
-      }
-
-      saveCustomFormulas();
-      activeCalcTab = "ai-custom";
-      renderSidebar();
-      renderView();
-      const afterBox = document.getElementById("aiFormulaMsg");
-      if (afterBox) {
-        afterBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) hinzugefügt!</div>`;
+        if (added === 0) throw new Error("Keine gültigen Formel-Felder (title, formula) gefunden.");
+        saveCustomFormulaFolders();
+        saveCustomFormulas();
+        renderSidebar();
+        document.getElementById("aiFormulaCodeArea").value = "";
+        msgBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) erfolgreich hinzugefügt!</div>`;
+        activeCalcTab = "ai-custom";
+        renderView();
+      } catch (err) {
+        msgBox.innerHTML = `<div class="result-banner result-err">❌ Ungültiges JSON-Format: ${escapeHtml(err.message)}</div>`;
       }
     }
 
     function runCustomFormulaCalc(cfId) {
-      const cf = customFormulas.find(x => x.id === cfId);
+      const cf = customFormulas.find(f => f.id === cfId);
       if (!cf) return;
-      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value);
-      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value);
-      const resBox = document.getElementById("cfres-" + cfId);
-      if (isNaN(v1) || isNaN(v2)) return;
+      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value) || 0;
+      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value) || 0;
+      let res = 0;
+      if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : 0;
+      else if (cf.formulaType === "add") res = v1 + v2;
+      else if (cf.formulaType === "sub") res = v1 - v2;
+      else res = v1 * v2;
 
-      let out = 0;
-      if (cf.formulaType === "div") {
-        if (v2 === 0) {
-          resBox.innerHTML = `<div class="result-banner result-err">Division durch 0 nicht möglich.</div>`;
-          return;
-        }
-        out = v1 / v2;
-      } else if (cf.formulaType === "add") {
-        out = v1 + v2;
-      } else if (cf.formulaType === "sub") {
-        out = v1 - v2;
-      } else {
-        out = v1 * v2;
-      }
-
-      resBox.innerHTML = `<div class="result-banner result-ok">Ergebnis: <strong>${Number(out.toFixed(4))}</strong></div>`;
+      const box = document.getElementById("cfres-" + cfId);
+      box.innerHTML = `<div class="result-banner result-ok">Ergebnis: ${Number.isInteger(res) ? res : res.toFixed(3)}</div>`;
+      typesetMath(box);
     }
 
     function deleteCustomFormula(cfId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
-      customFormulas = customFormulas.filter(x => x.id !== cfId);
+      customFormulas = customFormulas.filter(f => f.id !== cfId);
       saveCustomFormulas();
-      renderSidebar();
-      renderView();
-    }
-
-    function openAccessModal(subId) {
-      if (!isAdmin()) return;
-      const sub = subjects.find(s => s.id === subId);
-      if (!sub) return;
-      editingSubjectId = subId;
-      tempSelectedUsers = new Set(sub.allowedUsers || []);
-      renderView();
-      toggleUserGridDisabled();
-    }
-
-    function toggleUserGridDisabled() {
-      const accessAll = document.getElementById("modalAccessAll")?.checked;
-      const grid = document.getElementById("modalUserGrid");
-      if (!grid) return;
-      grid.style.opacity = accessAll ? "0.45" : "1";
-      grid.style.pointerEvents = accessAll ? "none" : "auto";
-    }
-
-    function toggleTempUser(userId, checked) {
-      if (checked) tempSelectedUsers.add(userId);
-      else tempSelectedUsers.delete(userId);
-    }
-
-    function saveSubjectAccess() {
-      if (!isAdmin()) return;
-      const sub = subjects.find(s => s.id === editingSubjectId);
-      if (!sub) return;
-      sub.accessAll = document.getElementById("modalAccessAll").checked;
-      sub.allowedUsers = Array.from(tempSelectedUsers);
-      editingSubjectId = null;
-      saveSubjects();
       renderSidebar();
       renderView();
     }
