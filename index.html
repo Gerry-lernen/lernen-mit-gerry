@@ -1082,12 +1082,6 @@
       ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       : null;
 
-    // =========================================================================
-    // STREAK-KONFIGURATION & LOGIK:
-    // - Startet bei 0
-    // - Geht pro Tag nur hoch, wenn man angemeldet ist UND etwas gelernt hat
-    // - Wenn man sich einen Tag nicht anmeldet (bzw. einen Tag auslässt), geht die Streak auf 0
-    // =========================================================================
     const STREAK_CONFIG = {
       initialStreak: 0,
       incrementPerDay: 1,
@@ -1122,12 +1116,10 @@
       const todayStr = getTodayDateString();
       const diff = getDayDiffFromToday(lastActiveDate);
 
-      // Neuer Tag -> learnedToday zurücksetzen
       if (lastActiveDate && lastActiveDate !== todayStr) {
         learnedToday = false;
       }
 
-      // Wenn mindestens 1 voller Tag ausgelassen wurde (z. B. gestern nicht eingeloggt -> diff >= 2, oder bei resetOnMissedDay diff > 1)
       if (diff !== null && diff > 1 && STREAK_CONFIG.resetOnMissedDay) {
         streak = 0;
         learnedToday = false;
@@ -1145,19 +1137,15 @@
       const todayStr = getTodayDateString();
       const diff = getDayDiffFromToday(userObj.lastActiveDate);
 
-      // Wurde ein Tag ausgelassen (diff > 1), Streak auf 0 setzen
       if (diff !== null && diff > 1 && STREAK_CONFIG.resetOnMissedDay) {
         userObj.streak = 0;
         userObj.learnedToday = false;
       }
 
-      // Wenn es ein neuer Tag ist, darf noch nicht als heute gelernt markiert sein
       if (userObj.lastActiveDate !== todayStr) {
         userObj.learnedToday = false;
       }
 
-      // Wichtig: Beim reinen Anmelden steigt die Streak NICHT automatisch;
-      // sie steigt erst, sobald heute auch gelernt wurde!
       saveUsers();
     }
 
@@ -1168,7 +1156,6 @@
       const todayStr = getTodayDateString();
       const diff = getDayDiffFromToday(currentUser.lastActiveDate);
 
-      // Falls länger als 1 Tag Pause war, zuerst auf 0 zurücksetzen
       if (diff !== null && diff > 1 && STREAK_CONFIG.resetOnMissedDay) {
         currentUser.streak = 0;
         currentUser.learnedToday = false;
@@ -1188,7 +1175,7 @@
       return { streakIncreased };
     }
 
-    let leaderboardTab = "points"; // "points" oder "streak"
+    let leaderboardTab = "points";
 
     const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
     let inactivityTimerId = null;
@@ -2255,6 +2242,7 @@
     let currentView = "home";
     let activeFolderId = null;
     let activeMaturaLang = "deutsch";
+    let openMaturaIndexByLang = { deutsch: 0, englisch: 0 };
     let editingSubjectId = null;
     let tempSelectedUsers = new Set();
 
@@ -3201,20 +3189,30 @@
 
     const maturaTextsorten = {"deutsch": [{"title": "1. Erörterung (linear &amp; dialektisch)", "structure": ["<strong>Ziel:</strong> Sachliche, objektive Auseinandersetzung mit einer strittigen Problemfrage.", "<strong>Einleitung:</strong> Aktueller Anlass, Hinführung zum Thema, zentrale Fragestellung (ohne eigene Meinung vorwegzunehmen).", "<strong>Hauptteil:</strong> Argumente nach dem <em>3-B-Schema</em> (Behauptung – Begründung – Beispiel). Bei dialektischer Erörterung: Gegenthese zuerst (vom stärksten zum schwächsten Argument), dann eigene Position (vom schwächsten zum stärksten Argument – Sanduhrprinzip).", "<strong>Schluss:</strong> Zusammenfassendes Fazit, begründete eigene Stellungnahme, Ausblick/Lösungsansatz.", "<strong>Stil:</strong> Sachlich, standardsprachlich, Präsens, Konnektoren (<em>einerseits, demgegenüber, folglich</em>)."], "sample": "„Befürworter einer verpflichtenden Vier-Tage-Woche verweisen vor allem auf die gesteigerte Produktivität der Beschäftigten. Durch längere Erholungsphasen sinkt die Fehleranfälligkeit im Arbeitsalltag messbar, was Pilotprojekte in Großbritannien mit einem Rückgang der Krankenstände um über 60 Prozent belegen.\n\nDemgegenüber stehen jedoch erhebliche organisatorische Hürden in personalintensiven Branchen wie der Pflege oder dem produzierenden Gewerbe. Wo Schichtbetrieb rund um die Uhr erforderlich ist, führt eine Arbeitszeitverkürzung bei vollem Lohnausgleich unweigerlich zu steigenden Lohnstückkosten.\n\nZusammenfassend überwiegen die gesundheitlichen Vorteile nur dort, wo Arbeitsprozesse digitalisiert und flexibel gestaltet werden können. Eine pauschale gesetzliche Vorgabe wäre daher kontraproduktiv; sinnvoller sind branchenspezifische Tarifmodelle.“", "exercises": ["Erörtern Sie auf Basis eines Zeitungsartikels zur Künstlichen Intelligenz im Bildungswesen, inwiefern digitale Assistenzsysteme klassische Prüfungsformen ersetzen sollten.", "Setzen Sie sich mit der Forderung nach einem generellen Tempolimit von 100 km/h auf österreichischen Autobahnen auseinander.", "Diskutieren Sie Vor- und Nachteile eines verpflichtenden sozialen Jahres für alle Schulabgängerinnen und Schulabgänger.", "Erörtern Sie, ob Bargeldzahlungen durch gesetzliche Obergrenzen eingeschränkt werden sollten, um Schattenwirtschaft zu bekämpfen.", "Untersuchen Sie die gesellschaftlichen Auswirkungen von verpflichtenden Quotenregelungen für Führungspositionen in Konzernen."]}, {"title": "2. Kommentar", "structure": ["<strong>Ziel:</strong> Subjektive, pointierte Meinungsäußerung eines Journalisten zu einem aktuellen Thema.", "<strong>Überschrift:</strong> Prägnant, meinungsstark, oft provokant oder wortspielerisch (ggf. Untertitel).", "<strong>Einstieg (Lead):</strong> Direkter Aufhänger (aktuelles Ereignis/Zitat) + sofortige klare Positionierung (These).", "<strong>Hauptteil:</strong> Zuspitzende Argumentation, Bewertung von Gegenargumenten, rhetorische Stilmittel (Ironie, Metaphern, rhetorische Fragen).", "<strong>Schluss:</strong> Pointiertes Fazit, Appell oder bissige Schlussbemerkung (Kein „Ich finde“!)."], "sample": "<strong>Digitale Scheinheiligkeit im Klassenzimmer</strong>\n\nWer heute das Smartphone aus den Schulen verbannt, verwechselt das Verstecken eines Symptoms mit der Heilung einer Krankheit. Seit Monaten überbieten sich Bildungspolitiker mit Forderungen nach strikten Handyverboten – als ließe sich die digitale Realität schlicht an der Garderobe abgeben.\n\nNatürlich lenken permanente Push-Nachrichten ab. Doch ein pauschales Verbot entbindet Schulen genau von jener Aufgabe, die im 21. Jahrhundert überlebenswichtig ist: Medienkompetenz zu vermitteln. Wer Jugendlichen das Werkzeug wegnimmt, statt ihnen den kritischen Umgang damit beizubringen, erzieht digitale Analphabeten.\n\nStatt Verbotskultur braucht es endlich praxisnahe Unterrichtskonzepte. Alles andere ist bildungspolitische Symbolpolitik auf Kosten der nächsten Generation.", "exercises": ["Verfassen Sie einen Kommentar für eine überregionale Tageszeitung zum Thema „Fast Fashion und Wegwerfkonsum unter Jugendlichen“.", "Kommentieren Sie für ein Online-Magazin die zunehmende Verlagerung des Einzelhandels in den E-Commerce und das Aussterben von Innenstädten.", "Schreiben Sie einen pointierten Kommentar zur Debatte um Influencer-Marketing und versteckte Werbung in sozialen Netzwerken.", "Nehmen Sie in Form eines Kommentars Stellung zur Diskussion über höhere Studiengebühren oder Zugangsbeschränkungen an Universitäten.", "Verfassen Sie einen Kommentar zur Frage, ob Großveranstaltungen wie Olympische Spiele in Zeiten der Klimakrise noch zeitgemäß sind."]}, {"title": "3. Leserbrief", "structure": ["<strong>Ziel:</strong> Persönliche Reaktion einer Leserin / eines Lesers auf einen konkret veröffentlichten Zeitungs- oder Magazinartikel.", "<strong>Kopfzeile:</strong> Betreff/Bezug auf Artikel (Titel, Autor, Erscheinungsdatum) + Anrede („Sehr geehrte Redaktion,“).", "<strong>Einleitung:</strong> Klarer Bezug zum Ausgangstext und Nennung des eigenen Standpunkts (Zustimmung/Widerspruch).", "<strong>Hauptteil:</strong> Bezugnahme auf konkrete Textstellen des Ausgangstextes, eigene Argumente und persönliche Erfahrungen.", "<strong>Schluss:</strong> Abschließende Forderung/Appell, Grußformel, vollständiger Name + Wohnort (laut Vorgabe)."], "sample": "<strong>Betreff: Ihr Artikel „Wohnen wird zum Luxusgut“ von Maria Gruber vom 12.10.2026</strong>\n\nSehr geehrte Redaktion,\n\nmit großem Interesse, aber auch wachsender Ernüchterung habe ich den oben genannten Beitrag gelesen. Als junger Berufstätiger, der nebenbei eine Abendschule absolviert, kann ich die geschilderten Entwicklungen am Mietmarkt aus eigener Erfahrung bestätigen.\n\nBesonders die Aussage, junge Menschen müssten eben „flexibler bei der Wohnortwahl“ sein, greift zu kurz. Wer im Umland wohnt, zahlt die vermeintliche Mietersparnis doppelt durch Pendelkosten und verlorene Lebenszeit zurück. Solange Spekulation mit Baugrund nicht wirksam eingedämmt wird, bleibt leistbares Wohnen eine Illusion.\n\nEs ist höchste Zeit, den gemeinnützigen Wohnbau wieder massiv auszubauen, statt den Markt sich selbst zu überlassen.\n\nMit freundlichen Grüßen\nLukas Berger, Klosterneuburg", "exercises": ["Reagieren Sie mit einem Leserbrief auf einen Artikel, der die mangelnde Leistungsbereitschaft der „Generation Z“ kritisiert.", "Schreiben Sie einen Leserbrief zu einem Beitrag über die Einführung von KI-Systemen in der medizinischen Diagnostik.", "Verfassen Sie einen Leserbrief als Reaktion auf eine Kolumne, die das Ende des klassischen Verbrennungsmotors bis 2035 als wirtschaftlichen Fehler bezeichnet.", "Reagieren Sie auf einen Zeitungsbericht über den zunehmenden Lehrermangel und die Forderung nach Quereinsteigern an Schulen.", "Schreiben Sie einen Leserbrief zu einem Artikel über den massiven Ausbau von Windkraftanlagen in österreichischen Erholungsgebieten."]}, {"title": "4. Meinungsrede", "structure": ["<strong>Ziel:</strong> Mündlich vorgetragene Rede vor einem definierten Publikum, um zu überzeugen und zum Handeln zu bewegen.", "<strong>Einstieg:</strong> Situationsgerechte Begrüßung des Publikums + fesselnder Einstieg (Anekdote, provokante Frage, Statistik).", "<strong>Hauptteil:</strong> Klare Struktur, direkte Publikumsansprache (<em>„Stellen Sie sich vor…“, „Wir alle wissen…“</em>), abwechslungsreicher Satzbau (Parataxen), rhetorische Figuren (Anaphern, Klimax, Vergleiche).", "<strong>Schluss:</strong> Zusammenfassende Kernbotschaft, eindringlicher Appell zum Handeln, Dank an das Publikum."], "sample": "„Sehr geehrte Damen und Herren, liebe Schülerinnen und Schüler!\n\nHand aufs Herz: Wann haben Sie das letzte Mal eine Stunde lang ein Buch gelesen, ohne einmal auf Ihr Smartphone zu blicken? Wenn Sie jetzt kurz zögern, sind Sie in guter Gesellschaft.\n\nWir leben in einer Aufmerksamkeitsökonomie, die unsere Konzentration im Sekundentakt zerschneidet. Algorithmen wissen besser als wir selbst, welche Schlagzeile uns empört und welches Video uns festhält. Doch wer ständig nur konsumiert, verliert die Fähigkeit, eigene Gedanken zu Ende zu denken.\n\nDeshalb mein Appell an Sie alle: Nehmen Sie sich Ihre Aufmerksamkeit zurück! Schalten Sie abends bewusst ab und schaffen Sie Raum für echte Gespräche. Vielen Dank für Ihre Aufmerksamkeit.“", "exercises": ["Halten Sie eine Meinungsrede bei einer Jugendkonferenz zum Thema „Politische Mitbestimmung ab 16 – Chance oder Überforderung?“.", "Verfassen Sie eine Rede anlässlich einer Schulentlassungsfeier über den Wert handwerklicher und technischer Berufe im Vergleich zum Akademisierungswahn.", "Schreiben Sie eine Meinungsrede für ein Umweltforum zur Frage, ob individueller Verzicht oder technologische Innovation das Klima rettet.", "Halten Sie eine Rede vor Eltern und Lehrkräften über den verantwortungsvollen Umgang mit sozialen Medien und Cybermobbing.", "Verfassen Sie eine Meinungsrede bei einer Sportveranstaltung über die Bedeutung von Ehrenamt und Vereinsleben für den gesellschaftlichen Zusammenhalt."]}, {"title": "5. Textanalyse", "structure": ["<strong>Ziel:</strong> Systematische Untersuchung eines Sachtextes oder literarischen Textes hinsichtlich Inhalt, Aufbau, Sprache und Intention.", "<strong>Einleitung:</strong> Basissatz (Autor, Titel, Textsorte, Erscheinungsjahr/-ort, Kernaussage/Thema).", "<strong>Hauptteil:</strong><br>1. Inhaltliche Strukturierung (Sinnabschnitte, Argumentationsgang).<br>2. Sprachlich-stilistische Analyse (Wortwahl, Satzbau, Stilmittel wie Metaphern, Ironie, Konjunktiv) – immer mit <strong>Textbeleg (Zeilenangabe)</strong> und <strong>Wirkung</strong>!<br>3. Intention des Autors &amp; Zielgruppe.", "<strong>Schluss:</strong> Zusammenfassung der wichtigsten Analyseergebnisse, Bewertung der Überzeugungskraft."], "sample": "„Der Autor bedient sich im zweiten Abschnitt einer auffallend kriegerischen Metaphorik, um die Konkurrenz auf dem Arbeitsmarkt zu dramatisieren. Formulierungen wie ‚Kampf um die besten Köpfe‘ (Z. 14) oder ‚Verteidigungslinie der Arbeitnehmerrechte‘ (Z. 19) erzeugen beim Leser das Bild einer unmittelbaren Bedrohung.\n\nUnterstützt wird diese Zuspitzung durch kurze, elliptische Sätze (vgl. Z. 22–24), die das Lesetempo erhöhen und Dringlichkeit vermitteln. Damit verfolgt der Verfasser das Ziel, das Publikum emotional zu mobilisieren und für eine rasche Reform des Arbeitsrechts zu gewinnen.“", "exercises": ["Analysieren Sie eine politische Kolumne hinsichtlich ihrer Argumentationsstruktur, Wortwahl und persuasiven Stilmittel.", "Untersuchen Sie einen zeitgenössischen literarischen Kurzprosatext in Bezug auf Erzählperspektive, Figurencharakterisierung und sprachliche Gestaltung.", "Analysieren Sie eine historische oder aktuelle Rede auf rhetorische Strategien zur Publikumsbindung und Emotionalisierung.", "Untersuchen Sie einen populärwissenschaftlichen Essay darauf, wie komplexe Fachinhalte für ein Laienpublikum aufbereitet werden.", "Analysieren Sie einen satirischen Kommentar und arbeiten Sie heraus, durch welche sprachlichen Mittel Ironie und Gesellschaftskritik erzeugt werden."]}, {"title": "6. Textinterpretation", "structure": ["<strong>Ziel:</strong> Erschließung tieferer Bedeutungsebenen (Motive, Symbolik, Konflikte) eines literarischen Textes (Kurzgeschichte, Gedicht, Dramenauszug).", "<strong>Einleitung:</strong> Basissatz (Autor, Titel, Gattung, Entstehungszeit) + Formulierung der zentralen <strong>Deutungshypothese</strong>.", "<strong>Hauptteil:</strong><br>– Inhalt &amp; Handlungsverlauf knapp skizzieren.<br>– Figurenkonstellation, Raum- und Zeitgestaltung, Erzählverhalten.<br>– Verknüpfung von Form/Sprache (Symbole, Leitmotive) mit der Deutungshypothese (stets am Text belegt!).", "<strong>Schluss:</strong> Rückbezug auf die Deutungshypothese (Bestätigung/Differenzierung) und Einordnung in einen größeren Kontext."], "sample": "„In der Kurzgeschichte ‚Die Küchenuhr‘ von Wolfgang Borchert aus dem Jahr 1947 steht die Bewältigung von Kriegstraumata und dem Verlust von Geborgenheit im Mittelpunkt.\n\nDas zentrale Dingsymbol der stehen gebliebenen Küchenuhr (vgl. Z. 18) verweist nicht bloß auf den Zeitpunkt des Bombenangriffs um halb drei, sondern symbolisiert das Ende der unbeschwerten Kindheit des Protagonisten. Während die Umwelt die Uhr als bloßen Sachschaden abtut, erkennt der junge Mann darin das letzte Relikt mütterlicher Fürsorge. Die karge, parataktische Sprache spiegelt die innere Sprachlosigkeit einer ganzen Nachkriegsgeneration wider.“", "exercises": ["Interpretieren Sie eine Kurzgeschichte der Nachkriegsliteratur (z. B. Borchert oder Böll) im Hinblick auf Kommunikationsstörungen zwischen den Figuren.", "Deuten Sie ein modernes Großstadtgedicht hinsichtlich der Darstellung von Entfremdung und Hektik durch Metaphorik und Metrum.", "Interpretieren Sie einen Dramenauszug (z. B. Dürrenmatt oder Frisch) mit Fokus auf den moralischen Konflikt der Hauptfigur.", "Untersuchen Sie eine Parabel (z. B. von Franz Kafka) und entwickeln Sie eine schlüssige Deutung der symbolischen Raum- und Machtstrukturen.", "Interpretieren Sie eine zeitgenössische Erzählung über Generationenkonflikte und arbeiten Sie die Bedeutung der Erzählperspektive heraus."]}, {"title": "7. Zusammenfassung", "structure": ["<strong>Ziel:</strong> Knappe, objektive Wiedergabe der Kernaussagen eines Ausgangstextes (ca. 1/3 der Originallänge).", "<strong>Einleitung:</strong> Basissatz (Autor, Titel, Textsorte, Erscheinungsdatum/-ort, Hauptthema).", "<strong>Hauptteil:</strong> Beschränkung auf das Wesentliche (keine Beispiele, keine wörtlichen Zitate, keine Details/Anekdoten), eigene Formulierungen, logische Verknüpfung, Präsens, indirekte Rede (Konjunktiv I) bei Meinungen.", "<strong>Schluss:</strong> Kurze Wiedergabe des Fazits des Ausgangstextes – <strong>strikt ohne eigene Meinung!</strong>"], "sample": "„In dem am 5. Mai 2026 in der Tageszeitung ‚Der Standard‘ erschienenen Sachartikel ‚Die Zukunft der Fernwärme‘ thematisiert die Journalistin Clara Weber den Ausbau klimaneutraler Heizsysteme in Ballungsräumen.\n\nZunächst erläutert die Autorin, dass fossile Heizsysteme einen erheblichen Anteil der städtischen Emissionen verursachen. Anschließend stellt sie Geothermie und industrielle Abwärme als zentrale Alternativen vor, weist jedoch darauf hin, dass hohe Investitionskosten und langwierige Genehmigungsverfahren den Ausbau bremsen. Abschließend betont Weber, dass das Gelingen der Wärmewende maßgeblich von langfristigen Fördermodellen abhänge.“", "exercises": ["Fassen Sie einen 600 Wörter langen Wissenschaftsartikel über Mikroplastik in Alpengewässern in maximal 180 Wörtern zusammen.", "Geben Sie die Kernaussagen eines Wirtschaftsbeitrags zum Fachkräftemangel in der österreichischen Metall- und Elektroindustrie strukturiert wieder.", "Fassen Sie einen psychologischen Essay über die Auswirkungen von Schlafmangel auf die Lernfähigkeit Jugendlicher sachlich zusammen.", "Erstellen Sie eine Zusammenfassung eines Gastkommentars zur Reform des Pensionssystems (ohne eigene Wertung).", "Fassen Sie einen Report über autonome Transportsysteme in der Logistikbranche in eigenen Worten zusammen."]}, {"title": "8. Empfehlung", "structure": ["<strong>Ziel:</strong> Begründeter Vorschlag für eine Entscheidung, Maßnahme, ein Buch/Projekt oder eine Anschaffung für einen bestimmten Adressatenkreis.", "<strong>Überschrift / Betreff:</strong> Klarer Hinweis auf das empfohlene Objekt/Vorhaben und die Zielgruppe.", "<strong>Einleitung:</strong> Anlass und Ausgangssituation (Warum wird eine Empfehlung ausgesprochen?).", "<strong>Hauptteil:</strong> Vorstellung der Option(en), kriteriengeleitete Abwägung von Vor- und Nachteilen, klare Begründung der Eignung für die Zielgruppe.", "<strong>Schluss:</strong> Konkrete Handlungsempfehlung und Ausblick auf den erwarteten Nutzen."], "sample": "<strong>Empfehlung zur Einführung digitaler Lernplattformen an Abendschulen</strong>\n\nAngesichts der hohen Doppelbelastung berufstätiger Studierender empfiehlt die Schülervertretung die flächendeckende Einführung einer einheitlichen Lernplattform mit aufgezeichneten Übungseinheiten.\n\nIm Vergleich zu losen Zettelsammlungen ermöglicht eine strukturierte Plattform das zeit- und ortsunabhängige Nachholen versäumter Einheiten. Zwar erfordert die Erstbefüllung durch die Lehrkräfte einen gewissen Mehraufwand, doch überwiegt langfristig die Zeitersparnis bei der Prüfungs- und Maturavorbereitung erheblich. Es wird daher empfohlen, bereits ab dem kommenden Semester ein Pilotprojekt in den Hauptfächern zu starten.", "exercises": ["Verfassen Sie für die Schulleitung eine Empfehlung zur Neugestaltung des Schulhofs unter ökologischen und sozialen Gesichtspunkten.", "Schreiben Sie für ein Jugendmagazin eine begründete Empfehlung für einen aktuellen Sachbuch-Bestseller zum Thema Finanzbildung.", "Erstellen Sie für die Geschäftsführung eines mittelständischen Betriebs eine Empfehlung zur Einführung eines betrieblichen Gesundheitsprogramms.", "Verfassen Sie für die Maturaklasse eine begründete Empfehlung für ein Reiseziel für die Maturareise anhand vorgegebener Kriterien (Budget, Kultur, Nachhaltigkeit).", "Schreiben Sie für den Gemeinderat eine Empfehlung zur Verbesserung der Radinfrastruktur zwischen Bahnhof und Schulzentrum."]}], "englisch": [{"title": "1. Essay (Opinion / For-and-Against Essay)", "structure": ["<strong>Register:</strong> Formal / semi-formal, objective, academic tone (no contractions like <em>don't</em>, no slang).", "<strong>Title:</strong> Neutral and informative (optional, unless requested).", "<strong>Introduction:</strong> General hook + background info + clear <strong>thesis statement</strong> outlining the essay's focus.", "<strong>Body Paragraphs (2–3):</strong> PEEL structure (<strong>P</strong>oint – <strong>E</strong>xplain – <strong>E</strong>xample – <strong>L</strong>ink). Present balanced arguments or defend your thesis logically.", "<strong>Conclusion:</strong> Restate thesis in new words, summarise main points, final thought (no new arguments!)."], "sample": "In recent decades, the rapid expansion of remote work has fundamentally reshaped traditional employment models. While working from home offers undeniable flexibility, its long-term impact on corporate culture remains controversial.\n\nOn the one hand, remote work eliminates daily commuting, thereby reducing carbon emissions and improving employees' work-life balance. Studies consistently indicate that autonomous workers report higher job satisfaction. On the other hand, prolonged physical separation can weaken team cohesion and hinder informal knowledge transfer among colleagues.\n\nIn conclusion, although remote work enhances individual flexibility, a hybrid model combining home office with regular on-site collaboration represents the most sustainable approach for modern businesses.", "exercises": ["Write an essay discussing whether university education should be completely free of charge for all students, regardless of their financial background.", "\"Social media platforms do more to divide society than to connect people.\" Discuss this statement in a well-structured essay.", "Write an essay examining the advantages and disadvantages of banning private cars from city centres.", "Should governments impose higher taxes on sugary drinks and fast food to combat public health issues? Write an essay presenting your view.", "Discuss the impact of artificial intelligence on future job markets and the skills young people need to acquire."]}, {"title": "2. Article (Newspaper / Magazine / Online)", "structure": ["<strong>Register:</strong> Semi-formal to informal (depends on target publication, e.g. youth magazine vs. newspaper), engaging and lively.", "<strong>Headline (+ Subheading):</strong> Catchy, intriguing, encourages the reader to continue.", "<strong>Introduction:</strong> Engaging hook (rhetorical question, surprising fact, short anecdote) + introduce topic.", "<strong>Body Paragraphs:</strong> Clear sub-topics, vivid descriptions, rhetorical questions, direct reader address (<em>\"Have you ever wondered...?\"</em>).", "<strong>Conclusion:</strong> Memorable closing thought, call to action, or punchy summary."], "sample": "<strong>Unplugged: Why Gen Z Is Rediscovering Dumbphones</strong>\n\nHave you ever checked your phone just to see the time, only to realize forty minutes later that you are still scrolling through random videos? You are certainly not alone.\n\nAcross Europe, a surprising trend is gaining momentum among teenagers and young adults: ditching high-end smartphones for basic flip phones. Tired of constant notifications and social comparison, many young people are craving genuine offline experiences. As 19-year-old student Clara puts it, \"Switching to a basic phone gave me my evenings—and my concentration—back.\"\n\nPerhaps true digital freedom does not mean having the latest device in your pocket, but knowing when to leave it behind.", "exercises": ["Write an article for an international student magazine about how volunteering abroad can change a young person's perspective on life.", "You are writing an article for your school's English newsletter titled \"Fitness Trends: Health Boost or Social Media Pressure?\".", "Write an article for an online lifestyle magazine exploring the rise of second-hand shopping and sustainable fashion among teenagers.", "Write an article for a local newspaper about how tourism affects small alpine communities in Austria.", "Write an engaging article for a youth magazine on why learning a practical trade is just as valuable as getting a university degree."]}, {"title": "3. Report", "structure": ["<strong>Register:</strong> Strictly formal, factual, objective, impersonal (use passive voice, avoid contractions).", "<strong>Header / Title:</strong> Clear title (or <em>To / From / Date / Subject</em> if specified).", "<strong>Section Headings:</strong> Mandatory! Organize every paragraph under clear headings (e.g., <em>Introduction, Current Situation, Key Findings, Recommendations</em>).", "<strong>Body:</strong> Present facts, survey results, strengths and weaknesses clearly (bullet points allowed sparingly).", "<strong>Conclusion / Recommendations:</strong> Actionable suggestions addressed to the superior/organisation."], "sample": "<strong>Report on the Introduction of a School Canteen Recycling System</strong>\n\n<strong>Introduction</strong>\nThe aim of this report is to evaluate the current waste management practices in the school canteen and to propose measures for reducing single-use plastic.\n\n<strong>Current Situation</strong>\nA survey conducted among 150 students revealed that over 70% purchase beverages in disposable plastic bottles daily. Furthermore, existing waste bins are inadequately labelled, resulting in poor waste separation.\n\n<strong>Recommendations</strong>\nTo address these issues, it is recommended that the school install water refill stations on every floor and introduce clearly colour-coded recycling bins. Implementing these steps would significantly lower waste volumes within one semester.", "exercises": ["Your headteacher has asked you to write a report on the effectiveness of digital devices in classrooms at your school, including recommendations for improvement.", "You recently completed a two-week work placement at an engineering company. Write a report for your school coordinator evaluating the experience.", "Write a report for the local town council assessing public transport connections for students commuting from surrounding villages.", "As a member of the student council, write a report evaluating last year's school sports day and suggesting changes for next year.", "Write a report for an international youth exchange organisation assessing the accommodation and cultural programme of a recent trip."]}, {"title": "4. Formal Email / Letter (Application, Complaint, Inquiry)", "structure": ["<strong>Register:</strong> Formal, polite, concise, professional (no slang, no contractions).", "<strong>Subject Line:</strong> Clear and specific (for emails).", "<strong>Salutation:</strong> <em>Dear Sir or Madam,</em> (unknown name) or <em>Dear Mr/Ms Smith,</em> (known name).", "<strong>Opening Paragraph:</strong> State your reason for writing immediately (<em>\"I am writing to apply for / complain about / inquire about...\"</em>).", "<strong>Body Paragraphs:</strong> Cover all bullet points from the prompt logically (qualifications, details of complaint, specific questions).", "<strong>Closing &amp; Sign-off:</strong> Polite closing formula (<em>\"I look forward to hearing from you.\"</em>) + <em>Yours faithfully,</em> (if Sir/Madam) or <em>Yours sincerely,</em> (if named)."], "sample": "<strong>Subject: Application for Summer Internship – Mechanical Engineering Department</strong>\n\nDear Ms Harrison,\n\nI am writing to express my strong interest in the summer internship advertised on your company's website. Currently, I am attending an evening technical college for mechanical and industrial engineering in Vienna, having previously completed a vocational school in metalworking.\n\nDuring my previous employment as a CNC machinist, I gained hands-on experience in quality control and precision manufacturing. I am confident that my technical background and disciplined work ethic would make me a valuable addition to your team.\n\nI have attached my CV and would welcome the opportunity for an interview. I look forward to hearing from you.\n\nYours sincerely,\nGerald Weber", "exercises": ["Write a formal email applying for a summer job as an outdoor activity instructor at an international youth camp in Scotland.", "You recently bought a laptop online that arrived damaged, and customer service has not responded. Write a formal letter of complaint requesting a replacement or refund.", "Write a formal email to a language school in Dublin inquiring about intensive B2/C1 summer courses, accommodation, and fees.", "Write a letter to the editor of a British newspaper responding to an article that criticised young people's environmental awareness.", "You booked a group trip for your class, but the hotel changed the conditions shortly before departure. Write a formal email demanding a solution."]}, {"title": "5. Informal Email / Letter", "structure": ["<strong>Register:</strong> Friendly, conversational, personal (contractions like <em>I'm, don't</em>, phrasal verbs, idioms, exclamation marks allowed).", "<strong>Salutation:</strong> <em>Hi Sarah, / Dear Tom,</em>", "<strong>Opening:</strong> Warm greeting, ask how they are, refer to previous contact (<em>\"Thanks so much for your last email!\"</em>).", "<strong>Body Paragraphs:</strong> Address all bullet points naturally, share personal anecdotes, ask questions, make suggestions.", "<strong>Closing &amp; Sign-off:</strong> Friendly wrap-up (<em>\"Write back soon!\", \"Can't wait to catch up!\"</em>) + <em>Best wishes, / Take care, / Cheers,</em> + First name."], "sample": "<strong>Subject: Awesome news + summer plans!</strong>\n\nHi Ben,\n\nHow's it going? Sorry it's taken me ages to get back to you, I've been totally swamped with exams and work lately!\n\nAnyway, I'm writing because I finally passed my final practical project and I'm planning a road trip to Hungary this August. Since you mentioned wanting to get away for a few days, why don't you join us? We're thinking of checking out Budapest and spending a couple of days chilling by the Danube.\n\nLet me know what you think so we can sort out the dates!\n\nTake care,\nGerry", "exercises": ["Your British penfriend is visiting Austria for the first time next month. Write an email recommending places to visit, local food to try, and what clothes to pack.", "Write an email to a friend who is stressed about upcoming final exams, sharing your best study routines and fitness tips to stay focused.", "You recently started a new part-time job alongside school. Write an email to your cousin describing your daily tasks, colleagues, and how you manage your time.", "Write an email to an exchange student you met last summer, inviting them to a music festival in Austria and explaining the travel arrangements.", "Your friend asked for advice on whether to take a gap year or go straight to university. Write an informal email sharing your honest thoughts."]}, {"title": "6. Blog Post / Blog Comment", "structure": ["<strong>Register:</strong> Semi-formal to informal, personal, interactive, authentic online voice.", "<strong>Blog Post Title:</strong> Catchy, relatable title (for a Blog Comment: directly reference the original post/author).", "<strong>Opening:</strong> Hook the online community immediately; share your personal connection to the topic.", "<strong>Body Paragraphs:</strong> Mix personal experiences with clear opinions; use rhetorical questions to spark discussion.", "<strong>Ending (Call to Action):</strong> Explicitly invite readers to comment and share their views (<em>\"What's your take on this? Drop a comment below!\"</em>)."], "sample": "<strong>Balancing Night School, Full-Time Work, and Fitness: Is It Actually Possible?</strong>\n\nLet's be real: there are days when my alarm goes off at 5:30 AM and hitting snooze feels like the only logical option. Between a full-time engineering job, evening classes, and hitting my weekly workout goals, time management isn't just a buzzword—it's survival.\n\nOver the past year, I've learned that consistency beats perfection every single time. Prepping meals on Sunday and keeping workouts short but intense has completely changed my energy levels.\n\nHow do you stay disciplined when your schedule gets crazy? Share your best hacks in the comments below!", "exercises": ["Write a blog post for a travel blog about why active outdoor holidays (like via ferrata climbing or hiking) beat all-inclusive beach resorts.", "Read a blog post claiming that video games are a complete waste of time and write a detailed blog comment defending the cognitive and social benefits of gaming.", "Write a blog post for a student blog sharing practical tips on how young people can save and invest money on a tight budget.", "Write a blog comment responding to an article about the pressure to look \"perfect\" on Instagram and TikTok.", "Write a blog post about digital minimalism and why you decided to cut down your daily screen time."]}]};
 
+    function toggleMaturaTextsorte(lang, idx, event) {
+      if (event) event.preventDefault();
+      const validLang = lang === "englisch" ? "englisch" : "deutsch";
+      openMaturaIndexByLang[validLang] = openMaturaIndexByLang[validLang] === idx ? -1 : idx;
+      renderView();
+    }
+
     function renderMaturaTextsortenView() {
-      const list = maturaTextsorten[activeMaturaLang] || maturaTextsorten.deutsch;
+      const lang = activeMaturaLang === "englisch" ? "englisch" : "deutsch";
+      const list = maturaTextsorten[lang] || maturaTextsorten.deutsch;
+      const openIdx = openMaturaIndexByLang[lang];
+
       return `
         <div class="card">
           <div class="tab-strip">
-            <button class="btn-secondary" style="${activeMaturaLang === 'deutsch' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeMaturaLang='deutsch'; renderView();">🇦🇹 Deutsch (8 Textsorten)</button>
-            <button class="btn-secondary" style="${activeMaturaLang === 'englisch' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeMaturaLang='englisch'; renderView();">🇬🇧 Englisch B2 (6 Textsorten)</button>
+            <button class="btn-secondary" style="${lang === 'deutsch' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeMaturaLang='deutsch'; renderView();">🇦🇹 Deutsch (8 Textsorten)</button>
+            <button class="btn-secondary" style="${lang === 'englisch' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeMaturaLang='englisch'; renderView();">🇬🇧 Englisch B2 (6 Textsorten)</button>
           </div>
           <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
             Klicke auf eine Textsorte, um Aufbau, Musterbeispiel und alle 5 Matura-Übungsaufgaben aufzuklappen.
           </p>
           ${list.map((item, idx) => `
-            <details class="ts-item" ${idx === 0 ? "open" : ""}>
-              <summary>${item.title}</summary>
+            <details class="ts-item" ${openIdx === idx ? "open" : ""}>
+              <summary onclick="toggleMaturaTextsorte('${lang}', ${idx}, event)">${item.title}</summary>
               <div class="ts-body">
                 <div class="ts-cols">
                   <div class="ts-panel">
@@ -4395,70 +4393,63 @@
                 <label style="font-size:13px; font-weight:600;">Farbe</label>
                 <input type="color" id="newSubjectColorInput" value="#2563eb" style="width:48px; height:38px; border:1px solid var(--border); border-radius:8px; background:none; cursor:pointer; display:block; margin-top:6px;">
               </div>
-              <div style="display:flex; align-items:center; padding-top:16px;">
-                <label class="user-check-label" style="margin:0;">
-                  <input type="checkbox" id="newSubjectAccessAllInput" checked>
-                  <span>Für alle Benutzer freischalten</span>
+              <div style="display:flex; align-items:flex-end; padding-bottom:14px;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:13.5px; cursor:pointer;">
+                  <input type="checkbox" id="newSubjectAccessAllInput" checked> Für alle Benutzer sichtbar
                 </label>
               </div>
             </div>
 
-            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach erstellen</button>
+            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach jetzt anlegen</button>
             <div id="newSubjectFeedback"></div>
 
             <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
-              <h4 style="font-size:14px; margin-bottom:10px;">Vorhandene Unterrichtsfächer (${subjects.length})</h4>
+              <div style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">Vorhandene Unterrichtsfächer (${subjects.length})</div>
               ${subjects.map(s => `
-                <div class="setting-row">
+                <div class="setting-row" style="padding:8px 0;">
                   <div>
                     <strong>${s.icon} ${s.name}</strong>
                     <span class="count-pill" style="margin-left:6px;">${s.category}</span>
-                    <span class="count-pill" style="margin-left:4px;">${s.folders.length} Ordner</span>
+                    <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">${s.folders.length} Ordner</span>
                   </div>
-                  <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="navigate('subject-${s.id}')">Öffnen</button>
-                    <button type="button" class="btn-danger" onclick="adminDeleteSubject('${s.id}')">Löschen</button>
-                  </div>
+                  <button type="button" class="btn-danger" onclick="adminDeleteSubject('${s.id}')">Fach löschen</button>
                 </div>
               `).join("")}
             </div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">🏷️ Rollen verwalten &amp; neue Rollen erstellen</h3>
+            <h3 style="margin-bottom:4px;">🎭 Rollen verwalten &amp; neue Rolle erstellen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Standardrollen sind <strong>Schüler</strong>, <strong>Lehrer</strong> und <strong>Admin</strong>. Du kannst zusätzlich eigene Rollen anlegen (optional mit Admin-Rechten), umbenennen oder löschen.
+              Neben <strong>Schüler</strong>, <strong>Lehrer</strong> und <strong>Admin</strong> kannst du eigene Rollen anlegen, umbenennen oder löschen und optional mit Admin-Rechten ausstatten.
             </p>
 
             <div class="form-grid-2" style="align-items:end;">
               <div>
-                <label style="font-size:13px; font-weight:600;">Neue Rolle anlegen</label>
-                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor, Co-Admin oder Prüfer" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
+                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle *</label>
+                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Moderator, Tutor, Co-Admin" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
               </div>
-              <div>
-                <label class="user-check-label" style="margin:0;">
-                  <input type="checkbox" id="adminNewRoleIsAdmin">
-                  <span>Admin-Berechtigungen für diese Rolle aktivieren</span>
+              <div style="padding-bottom:2px;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:13.5px; cursor:pointer; padding:10px 0;">
+                  <input type="checkbox" id="adminNewRoleIsAdmin"> Admin-Rechte erteilen (darf Fächer, Fragen &amp; User verwalten)
                 </label>
               </div>
             </div>
-            <div style="margin-top:12px;">
-              <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Rolle hinzufügen</button>
-            </div>
+
+            <button type="button" class="btn-primary" style="margin-top:12px;" onclick="adminCreateCustomRole()">+ Rolle speichern</button>
 
             <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
+              <div style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">Verfügbare Rollen (${availableRoles.length})</div>
               ${availableRoles.map(r => `
-                <div class="setting-row">
+                <div class="setting-row" style="padding:8px 0;">
                   <div>
                     <strong>${r.name}</strong>
-                    ${r.isAdminRole ? '<span class="role-badge" style="margin-left:6px;">Admin-Rechte</span>' : '<span class="count-pill" style="margin-left:6px;">Standardrechte</span>'}
-                    <span class="count-pill" style="margin-left:6px;">${users.filter(u => u.role === r.name).length} Benutzer</span>
+                    ${r.isAdminRole ? `<span class="role-badge" style="margin-left:6px;">Admin-Rechte</span>` : `<span class="count-pill" style="margin-left:6px;">Standard-Rechte</span>`}
+                    ${r.builtIn ? `<span style="font-size:12px; color:var(--text-muted); margin-left:6px;">(Systemrolle)</span>` : ""}
                   </div>
-                  ${r.builtIn ? `
-                    <span style="font-size:12px; color:var(--text-muted);">Systemrolle</span>
-                  ` : `
+                  ${r.builtIn ? "" : `
                     <div style="display:flex; gap:8px;">
-                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminRenameCustomRole('${r.name.replace(/'/g, "\\'")}')">✏️ Umbenennen</button>
+                      <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="adminRenameCustomRole('${r.name.replace(/'/g, "\\'")}')">Umbenennen</button>
                       <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${r.name.replace(/'/g, "\\'")}')">Löschen</button>
                     </div>
                   `}
@@ -4468,27 +4459,27 @@
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">➕ Neuen Benutzer &amp; Initialpasswort anlegen</h3>
+            <h3 style="margin-bottom:4px;">👤 Neuen Benutzer anlegen (mit Initialpasswort)</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Lege Namen und Initialpasswort (Invite-Code) fest. Beim ersten Login mit dem Initialpasswort wird der Benutzer automatisch aufgefordert, ein eigenes Passwort zu vergeben.
+              Vergib einen Namen und ein Initialpasswort. Beim ersten Login mit dem Initialpasswort wird der Benutzer aufgefordert, ein eigenes Passwort festzulegen.
             </p>
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Name *</label>
-                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna K.">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
-                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@lernen-mit-gerry.at">
+                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna M.">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code *</label>
                 <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
               </div>
               <div>
+                <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
+                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="wird sonst automatisch erzeugt">
+              </div>
+              <div>
                 <label style="font-size:13px; font-weight:600;">Rolle</label>
                 <select id="adminNewUserRole" class="select-field">
-                  ${availableRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join("")}
+                  ${availableRoles.map(r => `<option value="${r.name}">${r.name}${r.isAdminRole ? " (Admin)" : ""}</option>`).join("")}
                 </select>
               </div>
             </div>
@@ -4496,38 +4487,61 @@
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:12px;">👥 Alle Benutzer (${users.length})</h3>
+            <h3 style="margin-bottom:12px;">Alle Benutzer (${users.length})</h3>
             ${users.map(u => {
-              const normU = normalizeUserStreak(u);
+              const userHasRoleInList = availableRoles.some(r => r.name === u.role);
+              const roleOptionsHtml = userHasRoleInList
+                ? availableRoles.map(r => `<option value="${r.name}" ${u.role === r.name ? 'selected' : ''}>${r.name}</option>`).join("")
+                : `<option value="${u.role}" selected>${u.role}</option>` + availableRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join("");
+
               return `
-              <div class="setting-row">
-                <div>
-                  <strong>${normU.name}</strong> <span class="role-badge">${normU.role}</span>
-                  <div style="font-size:12px; color:var(--text-muted);">
-                    ${normU.email} • ${normU.points || 0} Pkt • ${normU.streak || 0}d Streak 🔥 •
-                    ${normU.mustChangePassword
-                      ? `<span style="color:#d97706; font-weight:700;">Initialpasswort aktiv: <code>${normU.password}</code></span>`
-                      : `<span style="color:#10b981; font-weight:600;">Eigenes Passwort gesetzt</span>`
-                    }
+                <div class="setting-row">
+                  <div>
+                    <strong>${u.name}</strong>
+                    <span class="role-badge" style="margin-left:6px;">${u.role}</span>
+                    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                      ${u.email} • ${u.points || 0} Pkt • ${u.streak || 0}d 🔥 •
+                      ${u.mustChangePassword
+                        ? `Initialpasswort aktiv: <code>${u.password}</code>`
+                        : `Persönliches Passwort gesetzt`}
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${u.id}, this.value)" title="Rolle ändern">
+                      ${roleOptionsHtml}
+                    </select>
+                    <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${u.id})">🔑 Initial-PW setzen</button>
+                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Löschen</button>` : ""}
                   </div>
                 </div>
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                  <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${normU.id}, this.value)">
-                    ${availableRoles.map(r => `<option value="${r.name}" ${normU.role === r.name ? 'selected' : ''}>${r.name}</option>`).join("")}
-                  </select>
-                  <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${normU.id})">🔑 Initialpasswort setzen</button>
-                  ${normU.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${normU.id})">Löschen</button>` : ""}
-                </div>
-              </div>
-            `;
+              `;
             }).join("")}
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachberechtigungen</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lege fest, welche Benutzer Zugriff auf welches Unterrichtsfach haben.</p>
+            ${subjects.map(sub => `
+              <div class="setting-row">
+                <div>
+                  <strong>${sub.icon} ${sub.name}</strong>
+                  <div style="font-size:12px; color:var(--text-muted);">
+                    ${sub.accessAll ? "Für alle Benutzer freigeschaltet" : `Eingeschränkt (${sub.allowedUsers.length} Benutzer)`}
+                  </div>
+                </div>
+                <button class="btn-secondary" onclick="openAccessModal('${sub.id}')">Zugriff bearbeiten</button>
+              </div>
+            `).join("")}
+
+            ${editingSubjectId ? renderAccessEditor() : ""}
           </div>
 
           <div class="card">
             <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten (nur Admin)</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Änderungen hier werden direkt im Impressum angezeigt und über Supabase mit allen Geräten synchronisiert.
+              Passe die Angaben im Impressum an. Änderungen werden sofort gespeichert und mit der Cloud synchronisiert.
             </p>
+
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Betreiber / Projektname</label>
@@ -4538,52 +4552,21 @@
                 <input type="text" id="adminImpEmail" class="input-field" value="${(imprintData.email || '').replace(/"/g, '&quot;')}">
               </div>
             </div>
+
             <label style="font-size:13px; font-weight:600;">Standort / Anschrift</label>
             <input type="text" id="adminImpAddress" class="input-field" value="${(imprintData.address || '').replace(/"/g, '&quot;')}">
 
             <label style="font-size:13px; font-weight:600;">Zweck des Angebots</label>
-            <textarea id="adminImpRole" class="textarea-field">${imprintData.websiteRole || ''}</textarea>
+            <textarea id="adminImpRole" class="textarea-field" style="min-height:70px;">${imprintData.websiteRole || ''}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
-            <textarea id="adminImpDisclaimer" class="textarea-field">${imprintData.disclaimer || ''}</textarea>
+            <textarea id="adminImpDisclaimer" class="textarea-field" style="min-height:70px;">${imprintData.disclaimer || ''}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Datenschutzhinweis</label>
-            <textarea id="adminImpPrivacy" class="textarea-field">${imprintData.privacyNote || ''}</textarea>
+            <textarea id="adminImpPrivacy" class="textarea-field" style="min-height:70px;">${imprintData.privacyNote || ''}</textarea>
 
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
-              <button type="button" class="btn-secondary" onclick="navigate('imprint')">👁️ Impressum ansehen</button>
-            </div>
+            <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
             <div id="adminImprintSavedMsg"></div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachberechtigungen</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lege fest, welche Benutzer Zugriff auf welches Fach haben.</p>
-            ${subjects.map(s => `
-              <div class="setting-row">
-                <div>
-                  <strong>${s.icon} ${s.name}</strong>
-                  <div style="font-size:12px; color:var(--text-muted);">
-                    ${s.accessAll ? "Alle Benutzer haben Zugriff" : "Eingeschränkt (" + s.allowedUsers.length + " Benutzer)"}
-                  </div>
-                </div>
-                <button class="btn-secondary" onclick="openPermissionEditor('${s.id}')">Berechtigungen bearbeiten</button>
-              </div>
-            `).join("")}
-
-            <div id="permissionEditorBox" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-              <h4 id="permEditorTitle" style="margin-bottom:8px;"></h4>
-              <label class="user-check-label" style="margin-bottom:10px;">
-                <input type="checkbox" id="permAccessAllCheck" onchange="toggleAllUsersCheck(this.checked)">
-                <strong>Für ALLE Benutzer freischalten</strong>
-              </label>
-              <div class="user-checkbox-grid" id="permUsersGrid"></div>
-              <div style="margin-top:14px; display:flex; gap:10px;">
-                <button class="btn-primary" onclick="saveSubjectPermissions()">Speichern</button>
-                <button class="btn-secondary" onclick="document.getElementById('permissionEditorBox').style.display='none'">Abbrechen</button>
-              </div>
-            </div>
           </div>
         `;
       }
@@ -4591,15 +4574,12 @@
       typesetMath(container);
     }
 
-    function renderQuestionBlock(q, index, adminMode, subId, folderId) {
-      const delBtn = adminMode
-        ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>`
-        : "";
-
+    function renderQuestionBlock(q, index, canDelete, subId, folderId) {
+      const delBtn = canDelete ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>` : "";
       if (q.type === "mc") {
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
               <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
               ${delBtn}
             </div>
@@ -4616,12 +4596,12 @@
       } else {
         return `
           <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
               <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
               ${delBtn}
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
-              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
+              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Ergebnis eingeben...">
               <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
             </div>
             <div id="fb-${q.id}"></div>
@@ -4631,19 +4611,33 @@
     }
 
     function toggleNewQuestionFields() {
-      const t = document.getElementById("newQType").value;
-      document.getElementById("mcFieldsBox").style.display = t === "mc" ? "block" : "none";
-      document.getElementById("calcFieldsBox").style.display = t === "calc" ? "block" : "none";
+      const type = document.getElementById("newQType").value;
+      document.getElementById("mcFieldsBox").style.display = type === "mc" ? "block" : "none";
+      document.getElementById("calcFieldsBox").style.display = type === "calc" ? "block" : "none";
     }
 
     function copyAiPromptForFolder(subjectName, folderName) {
-      const promptText = `Erstelle 5 Lernfragen für das Fach "${subjectName}" zum Thema/Unterordner "${folderName}". Gib ausschließlich ein gültiges JSON-Array ohne Markdown-Codeblöcke (\`\`\`) zurück. Jedes Objekt soll exakt dieses Format haben:\n` +
-        `[{"type":"mc","question":"Fragetext...","options":["Option A","Option B","Option C","Option D"],"correct":"Option A","explanation":"Kurze Erklärung..."},{"type":"calc","question":"Rechenfrage...","answer":"42","explanation":"Lösungsweg..."}]`;
-
+      const promptText = `Erstelle 5 Lernfragen für das Fach "${subjectName}" im Ordner "${folderName}".
+Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Array ohne Markdown oder Zusatztext in genau diesem Format:
+[
+  {
+    "type": "mc",
+    "question": "Fragestellung?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct": "Option A",
+    "explanation": "Kurze Erklärung."
+  },
+  {
+    "type": "calc",
+    "question": "Rechenfrage mit Zahlenwerten?",
+    "answer": "42",
+    "explanation": "Kurzer Rechenweg."
+  }
+]`;
       navigator.clipboard?.writeText(promptText).catch(() => {});
       const msg = document.getElementById("aiImportMsg");
       if (msg) {
-        msg.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt kopiert! Füge ihn in deine KI ein und kopiere die JSON-Antwort direkt in das Feld darüber:<br><code style="font-size:11.5px; display:block; margin-top:6px; white-space:pre-wrap;">${promptText}</code></div>`;
+        msg.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt kopiert! Füge ihn in deine KI ein und kopiere das Ergebnis hier ins Textfeld.</div>`;
       }
     }
 
@@ -4651,126 +4645,167 @@
       if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
       const raw = document.getElementById("aiCodePasteArea").value.trim();
       const msg = document.getElementById("aiImportMsg");
-      if (!raw) return;
+      if (!raw) {
+        msg.innerHTML = `<div class="result-banner result-err">Bitte zuerst den KI-Code in das Textfeld einfügen.</div>`;
+        return;
+      }
 
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
+      let parsed;
       try {
-        const parsed = JSON.parse(cleaned);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
-        const sub = subjects.find(s => s.id === subId);
-        const folder = sub.folders.find(f => f.id === folderId);
-        let added = 0;
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        msg.innerHTML = `<div class="result-banner result-err">Ungültiges JSON-Format: ${e.message}</div>`;
+        return;
+      }
 
-        list.forEach((item, idx) => {
-          if (!item || !item.question) return;
-          if (item.type === "calc" || (!item.options && item.answer !== undefined)) {
-            folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
-              type: "calc",
-              question: String(item.question),
-              answer: String(item.answer ?? ""),
-              explanation: String(item.explanation || "Keine Erklärung hinterlegt.")
-            });
-            added++;
-          } else {
-            const opts = Array.isArray(item.options) && item.options.length >= 2
-              ? item.options.map(String)
-              : ["Antwort A", "Antwort B"];
-            const correct = item.correct && opts.includes(String(item.correct)) ? String(item.correct) : opts[0];
-            folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
-              type: "mc",
-              question: String(item.question),
-              options: opts,
-              correct,
-              explanation: String(item.explanation || "Keine Erklärung hinterlegt.")
-            });
-            added++;
-          }
-        });
+      const items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.questions) ? parsed.questions : null);
+      if (!items || items.length === 0) {
+        msg.innerHTML = `<div class="result-banner result-err">Es wurden keine Fragen im JSON gefunden.</div>`;
+        return;
+      }
 
-        saveSubjects();
-        renderSidebar();
-        renderView();
-        const afterMsg = document.getElementById("aiImportMsg");
-        if (afterMsg) {
-          afterMsg.innerHTML = `<div class="result-banner result-ok">⚡ ${added} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
+      const sub = subjects.find(s => s.id === subId);
+      const folder = sub.folders.find(f => f.id === folderId);
+      let addedCount = 0;
+
+      items.forEach((item, idx) => {
+        if (!item || !item.question) return;
+        const qType = item.type === "calc" ? "calc" : "mc";
+        const expl = String(item.explanation || "Keine Erklärung hinterlegt.");
+
+        if (qType === "calc" && item.answer !== undefined && String(item.answer).trim() !== "") {
+          folder.questions.push({
+            id: "q-ai-" + Date.now() + "-" + idx,
+            type: "calc",
+            question: String(item.question).trim(),
+            answer: String(item.answer).trim(),
+            explanation: expl
+          });
+          addedCount++;
+        } else if (Array.isArray(item.options) && item.options.length >= 2) {
+          const opts = item.options.map(o => String(o).trim()).filter(Boolean);
+          const corr = item.correct && opts.includes(String(item.correct).trim())
+            ? String(item.correct).trim()
+            : opts[0];
+          folder.questions.push({
+            id: "q-ai-" + Date.now() + "-" + idx,
+            type: "mc",
+            question: String(item.question).trim(),
+            options: opts,
+            correct: corr,
+            explanation: expl
+          });
+          addedCount++;
         }
-      } catch (err) {
-        if (msg) {
-          msg.innerHTML = `<div class="result-banner result-err">❌ Code konnte nicht gelesen werden. Bitte gültigen JSON-Code einfügen (${err.message}).</div>`;
-        }
+      });
+
+      if (addedCount === 0) {
+        msg.innerHTML = `<div class="result-banner result-err">Keine gültigen Fragen erkannt. Prüfe „type“, „question“ und „options“ bzw. „answer“.</div>`;
+        return;
+      }
+
+      saveSubjects();
+      renderSidebar();
+      renderView();
+      const afterMsg = document.getElementById("aiImportMsg");
+      if (afterMsg) {
+        afterMsg.innerHTML = `<div class="result-banner result-ok">✅ ${addedCount} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
       }
     }
 
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1") || "[]");
+    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
     function saveCustomFormulas() {
       localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
       queueCloudSync();
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine Formel mit Berechnung für das Lernportal. Gib ausschließlich ein gültiges JSON-Objekt ohne Markdown-Codeblöcke (\`\`\`) zurück. Format:\n` +
-        `{"title":"Titel der Formel","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Kurze Erklärung der Formel und Anwendung.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Variable 1 [Einheit]","var1Default":10,"var2Label":"Variable 2 [Einheit]","var2Default":5,"formulaType":"mul","unit":"Nm"}`;
+      const promptText = `Erstelle eine Lernformel mit Erklärung, Variablentabelle und Rechner im JSON-Format.
+Antworte AUSSCHLIESSLICH mit gültigem JSON (ohne Markdown oder Zusatztext) in genau diesem Format:
+{
+  "title": "Name der Formel",
+  "category": "Fachgebiet",
+  "formula": "F = m \\\\cdot a",
+  "description": "Kurze, klare Erklärung wofür die Formel verwendet wird.",
+  "variables": [
+    { "symbol": "F", "meaning": "Kraft in Newton (N)" },
+    { "symbol": "m", "meaning": "Masse in Kilogramm (kg)" },
+    { "symbol": "a", "meaning": "Beschleunigung in m/s²" }
+  ],
+  "var1Label": "Masse m [kg]",
+  "var1Default": 10,
+  "var2Label": "Beschleunigung a [m/s²]",
+  "var2Default": 9.81,
+  "formulaType": "mul"
+}
+Erlaubte formulaType-Werte: "mul" (var1 * var2), "div" (var1 / var2), "add" (var1 + var2), "sub" (var1 - var2).`;
       navigator.clipboard?.writeText(promptText).catch(() => {});
       const msg = document.getElementById("aiFormulaMsg");
       if (msg) {
-        msg.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt kopiert! Füge ihn in deine KI ein und kopiere das Ergebnis in das Feld darüber.</div>`;
+        msg.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt kopiert! Füge ihn in deine KI ein und kopiere das JSON hier ins Textfeld.</div>`;
       }
     }
 
     function importAiFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln hinzufügen.");
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln importieren.");
       const raw = document.getElementById("aiFormulaCodeArea").value.trim();
       const msg = document.getElementById("aiFormulaMsg");
-      if (!raw) return;
+      if (!raw) {
+        msg.innerHTML = `<div class="result-banner result-err">Bitte zuerst den Formel-Code einfügen.</div>`;
+        return;
+      }
+
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
 
+      let parsed;
       try {
-        const parsed = JSON.parse(cleaned);
-        const items = Array.isArray(parsed) ? parsed : [parsed];
-        let added = 0;
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        msg.innerHTML = `<div class="result-banner result-err">Ungültiges JSON: ${e.message}</div>`;
+        return;
+      }
 
-        items.forEach((obj, idx) => {
-          if (!obj || !obj.title || !obj.formula) return;
-          const v1Def = Number(obj.var1Default ?? 10);
-          const v2Def = Number(obj.var2Default ?? 5);
-          const vars = Array.isArray(obj.variables)
-            ? obj.variables
-                .filter(v => v && v.symbol && v.meaning)
-                .map(v => ({ symbol: String(v.symbol), meaning: String(v.meaning) }))
-            : [];
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      let added = 0;
 
-          customFormulas.push({
-            id: "cf-" + Date.now() + "-" + idx,
-            title: String(obj.title),
-            category: String(obj.category || "Allgemein"),
-            formula: String(obj.formula),
-            description: String(obj.description || ""),
-            variables: vars,
-            var1Label: String(obj.var1Label || "Wert 1"),
-            var1Default: isNaN(v1Def) ? 10 : v1Def,
-            var2Label: String(obj.var2Label || "Wert 2"),
-            var2Default: isNaN(v2Def) ? 5 : v2Def,
-            formulaType: String(obj.formulaType || "mul"),
-            unit: String(obj.unit || "")
-          });
-          added++;
+      list.forEach((item, idx) => {
+        if (!item || !item.title || !item.formula) return;
+        const cleanVars = Array.isArray(item.variables)
+          ? item.variables
+              .filter(v => v && v.symbol && v.meaning)
+              .map(v => ({ symbol: String(v.symbol).trim(), meaning: String(v.meaning).trim() }))
+          : [];
+
+        customFormulas.push({
+          id: "cf-" + Date.now() + "-" + idx,
+          title: String(item.title).trim(),
+          category: String(item.category || "Allgemein").trim(),
+          formula: String(item.formula).trim(),
+          description: String(item.description || "").trim(),
+          variables: cleanVars,
+          var1Label: String(item.var1Label || "Wert 1").trim(),
+          var1Default: Number(item.var1Default ?? 10),
+          var2Label: String(item.var2Label || "Wert 2").trim(),
+          var2Default: Number(item.var2Default ?? 5),
+          formulaType: ["mul", "div", "add", "sub"].includes(item.formulaType) ? item.formulaType : "mul"
         });
+        added++;
+      });
 
-        saveCustomFormulas();
-        renderSidebar();
-        activeCalcTab = "ai-custom";
-        renderView();
-        const afterMsg = document.getElementById("aiFormulaMsg");
-        if (afterMsg) {
-          afterMsg.innerHTML = `<div class="result-banner result-ok">⚡ ${added} Formel(n) erfolgreich hinzugefügt!</div>`;
-        }
-      } catch (err) {
-        if (msg) {
-          msg.innerHTML = `<div class="result-banner result-err">❌ Ungültiger Formel-Code (${err.message}).</div>`;
-        }
+      if (added === 0) {
+        msg.innerHTML = `<div class="result-banner result-err">Keine gültige Formel erkannt („title“ und „formula“ werden benötigt).</div>`;
+        return;
+      }
+
+      saveCustomFormulas();
+      activeCalcTab = "ai-custom";
+      renderSidebar();
+      renderView();
+      const afterMsg = document.getElementById("aiFormulaMsg");
+      if (afterMsg) {
+        afterMsg.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) hinzugefügt!</div>`;
       }
     }
 
@@ -4782,13 +4817,19 @@
       if (isNaN(v1) || isNaN(v2)) return;
 
       let res = 0;
-      if (cf.formulaType === "add") res = v1 + v2;
-      else if (cf.formulaType === "sub") res = v1 - v2;
-      else if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : 0;
-      else res = v1 * v2;
+      if (cf.formulaType === "div") {
+        if (v2 === 0) return;
+        res = v1 / v2;
+      } else if (cf.formulaType === "add") {
+        res = v1 + v2;
+      } else if (cf.formulaType === "sub") {
+        res = v1 - v2;
+      } else {
+        res = v1 * v2;
+      }
 
       const box = document.getElementById("cfres-" + cfId);
-      box.innerHTML = `<div class="result-banner result-ok">Ergebnis: <strong>${Number.isInteger(res) ? res : res.toFixed(3)}</strong> ${cf.unit}</div>`;
+      box.innerHTML = `<div class="result-banner result-ok">Ergebnis: ${Number.isInteger(res) ? res : res.toFixed(3)}</div>`;
     }
 
     function deleteCustomFormula(cfId) {
@@ -4799,46 +4840,59 @@
       renderView();
     }
 
-    function openPermissionEditor(subId) {
-      if (!isAdmin()) return;
+    function openAccessModal(subId) {
       const sub = subjects.find(s => s.id === subId);
-      if (!sub) return;
       editingSubjectId = subId;
       tempSelectedUsers = new Set(sub.allowedUsers || []);
-
-      document.getElementById("permissionEditorBox").style.display = "block";
-      document.getElementById("permEditorTitle").innerText = `Zugriff für „${sub.name}“ festlegen`;
-      document.getElementById("permAccessAllCheck").checked = Boolean(sub.accessAll);
-
-      document.getElementById("permUsersGrid").innerHTML = users.map(u => `
-        <label class="user-check-label">
-          <input type="checkbox" ${sub.accessAll || tempSelectedUsers.has(u.id) ? "checked" : ""}
-                 ${sub.accessAll ? "disabled" : ""}
-                 onchange="toggleUserPerm(${u.id}, this.checked)">
-          <span>${u.name} (${u.role})</span>
-        </label>
-      `).join("");
+      renderView();
     }
 
-    function toggleAllUsersCheck(checked) {
-      document.querySelectorAll("#permUsersGrid input[type='checkbox']").forEach(cb => {
-        cb.disabled = checked;
-        if (checked) cb.checked = true;
-      });
+    function renderAccessEditor() {
+      const sub = subjects.find(s => s.id === editingSubjectId);
+      if (!sub) return "";
+      return `
+        <div style="margin-top:16px; padding:16px; background:var(--bg-input); border-radius:12px; border:1px solid var(--border);">
+          <h4>Zugriff für „${sub.name}“ bearbeiten</h4>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:600; cursor:pointer;">
+            <input type="checkbox" id="accessAllCheckbox" ${sub.accessAll ? "checked" : ""} onchange="toggleAccessAllUsers(this.checked)">
+            Für ALLE Benutzer freischalten
+          </label>
+
+          <div id="specificUsersBox" style="display:${sub.accessAll ? 'none' : 'block'}; margin-top:12px;">
+            <div style="font-size:13px; color:var(--text-muted);">Wähle die berechtigten Benutzer aus:</div>
+            <div class="user-checkbox-grid">
+              ${users.map(u => `
+                <label class="user-check-label">
+                  <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleUserInSubject(${u.id}, this.checked)">
+                  <span>${u.name} (${u.role})</span>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+
+          <div style="margin-top:14px; display:flex; gap:8px;">
+            <button class="btn-primary" onclick="saveSubjectAccess()">Berechtigungen speichern</button>
+            <button class="btn-secondary" onclick="editingSubjectId=null; renderView();">Abbrechen</button>
+          </div>
+        </div>
+      `;
     }
 
-    function toggleUserPerm(userId, checked) {
+    function toggleAccessAllUsers(checked) {
+      document.getElementById("specificUsersBox").style.display = checked ? "none" : "block";
+    }
+
+    function toggleUserInSubject(userId, checked) {
       if (checked) tempSelectedUsers.add(userId);
       else tempSelectedUsers.delete(userId);
     }
 
-    function saveSubjectPermissions() {
-      if (!isAdmin() || !editingSubjectId) return;
+    function saveSubjectAccess() {
       const sub = subjects.find(s => s.id === editingSubjectId);
-      if (!sub) return;
-      const allChecked = document.getElementById("permAccessAllCheck").checked;
+      const allChecked = document.getElementById("accessAllCheckbox").checked;
       sub.accessAll = allChecked;
       sub.allowedUsers = allChecked ? [] : Array.from(tempSelectedUsers);
+      editingSubjectId = null;
       saveSubjects();
       renderSidebar();
       renderView();
