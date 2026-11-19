@@ -123,6 +123,16 @@
     .invite-pill-btn.home-pill:hover {
       background: var(--accent-hover);
     }
+    .invite-pill-btn.logout-pill {
+      background: rgba(220, 38, 38, 0.18);
+      border-color: rgba(248, 113, 113, 0.45);
+      color: #fca5a5;
+    }
+    .invite-pill-btn.logout-pill:hover {
+      background: rgba(220, 38, 38, 0.32);
+      border-color: #f87171;
+      color: #fff;
+    }
 
     .login-screen-wrapper {
       flex: 1;
@@ -779,6 +789,9 @@
         <button class="invite-pill-btn" id="topToggleScreenBtn" onclick="toggleLoginScreen()">
           ← Zurück zur Plattform
         </button>
+        <button class="invite-pill-btn logout-pill" id="topLogoutBtn" style="display:none;" onclick="logoutUser('manual')">
+          🚪 Abmelden
+        </button>
       </div>
     </div>
   </div>
@@ -790,6 +803,8 @@
       <p class="login-subtitle">
         Privates Lernportal · Formeln, Ableitungen, Matura &amp; Chat
       </p>
+
+      <div id="sessionLogoutBanner" style="display:none; background:var(--warning-bg); border:1px solid var(--warning-border); color:var(--warning-text); border-radius:12px; padding:10px 12px; font-size:12.5px; font-weight:700; margin-bottom:16px; text-align:left;"></div>
 
       <div class="segmented-control">
         <button class="segment-btn active" id="tabLoginBtn" onclick="switchLoginTab('login')">Anmelden</button>
@@ -963,6 +978,65 @@
       ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       : null;
 
+    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuten
+    let inactivityTimerId = null;
+
+    function setLogoutBannerMessage(msg) {
+      const banner = document.getElementById("sessionLogoutBanner");
+      if (!banner) return;
+      if (msg) {
+        banner.innerText = msg;
+        banner.style.display = "block";
+      } else {
+        banner.innerText = "";
+        banner.style.display = "none";
+      }
+    }
+
+    function clearInactivityTimer() {
+      if (inactivityTimerId) {
+        clearTimeout(inactivityTimerId);
+        inactivityTimerId = null;
+      }
+    }
+
+    function resetInactivityTimer() {
+      clearInactivityTimer();
+      if (!isLoginScreenVisible) {
+        inactivityTimerId = setTimeout(() => {
+          logoutUser("timeout");
+        }, INACTIVITY_TIMEOUT_MS);
+      }
+    }
+
+    function logoutUser(reason = "manual") {
+      clearInactivityTimer();
+      activeExamSession = null;
+      activeFolderId = null;
+      activeChatPartnerId = null;
+
+      const passInput = document.getElementById("loginPassInput");
+      if (passInput) passInput.value = "";
+      const inviteCodeInput = document.getElementById("inviteCodeInput");
+      if (inviteCodeInput) inviteCodeInput.value = "";
+
+      if (reason === "timeout") {
+        setLogoutBannerMessage("⏱️ Du wurdest nach 15 Minuten Inaktivität automatisch abgemeldet. Bitte melde dich erneut an.");
+      } else {
+        setLogoutBannerMessage("🚪 Du wurdest abgemeldet.");
+      }
+
+      toggleLoginScreen(false);
+    }
+
+    ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "wheel"].forEach(evtName => {
+      window.addEventListener(evtName, () => {
+        if (!isLoginScreenVisible) {
+          resetInactivityTimer();
+        }
+      }, { passive: true });
+    });
+
     let isApplyingCloudState = false;
     let cloudSyncTimer = null;
 
@@ -1092,8 +1166,10 @@
       const showBack = !isLoginScreenVisible && currentView !== "home";
       const topBtn = document.getElementById("topBackHomeBtn");
       const mainBtn = document.getElementById("mainBackHomeBtn");
+      const logoutBtn = document.getElementById("topLogoutBtn");
       if (topBtn) topBtn.style.display = showBack ? "inline-flex" : "none";
       if (mainBtn) mainBtn.style.display = showBack ? "inline-flex" : "none";
+      if (logoutBtn) logoutBtn.style.display = !isLoginScreenVisible ? "inline-flex" : "none";
     }
 
     const defaultUsers = [
@@ -1944,9 +2020,13 @@
       syncBackHomeButtons();
 
       if (!isLoginScreenVisible) {
+        setLogoutBannerMessage("");
+        resetInactivityTimer();
         loadFromCloud(false);
         renderSidebar();
         renderView();
+      } else {
+        clearInactivityTimer();
       }
     }
 
@@ -1997,6 +2077,7 @@
       activeChatPartnerId = null;
       activeExamSession = null;
       friendSearchQuery = "";
+      setLogoutBannerMessage("");
       updateTopStatusBar();
       toggleLoginScreen(true);
 
@@ -2056,7 +2137,7 @@
 
     function updateTopStatusBar() {
       document.getElementById("statusUserText").innerHTML =
-        `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Live-Sync aktiv`;
+        `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
     }
 
     function adminCreateUser() {
@@ -2205,6 +2286,7 @@
       if (btnEl) btnEl.classList.add("active");
       toggleSidebar(false);
       syncBackHomeButtons();
+      resetInactivityTimer();
       loadFromCloud(false);
       renderView();
     }
