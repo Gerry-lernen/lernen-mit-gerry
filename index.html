@@ -520,8 +520,13 @@
       border: 1px solid var(--border); background: var(--bg-input);
       color: var(--text-main); margin-top: 6px; margin-bottom: 12px; font-size: 14px;
     }
+    .input-field:focus, .select-field:focus, .textarea-field:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--bg-card);
+    }
     .textarea-field {
-      min-height: 110px;
+      min-height: 95px;
       resize: vertical;
       line-height: 1.45;
     }
@@ -999,9 +1004,17 @@
       ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       : null;
 
-    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minuten
+    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
     let inactivityTimerId = null;
     let isAuthenticated = false;
+    let lastLocalImprintSavedAt = 0;
+
+    function isUserTypingInForm() {
+      const active = document.activeElement;
+      if (!active) return false;
+      const tag = active.tagName ? active.tagName.toLowerCase() : "";
+      return tag === "input" || tag === "textarea" || tag === "select";
+    }
 
     function setLogoutBannerMessage(msg) {
       const banner = document.getElementById("sessionLogoutBanner");
@@ -1146,7 +1159,8 @@
           customFormulaFolders = d.customFormulaFolders;
           localStorage.setItem("lmg_formula_folders_v1", JSON.stringify(customFormulaFolders));
         }
-        if (d.imprintData && typeof d.imprintData === "object") {
+        const recentlySavedImprint = (Date.now() - lastLocalImprintSavedAt) < 4000;
+        if (!recentlySavedImprint && d.imprintData && typeof d.imprintData === "object") {
           imprintData = { ...defaultImprintData, ...d.imprintData };
           localStorage.setItem("lmg_imprint_v1", JSON.stringify(imprintData));
         }
@@ -1155,7 +1169,7 @@
           localStorage.setItem("lmg_contact_msgs_v1", JSON.stringify(contactMessages));
         }
 
-        if (isAuthenticated && !isLoginScreenVisible) {
+        if (isAuthenticated && !isLoginScreenVisible && !isUserTypingInForm()) {
           renderSidebar();
           renderView();
         }
@@ -1230,24 +1244,33 @@
     };
 
     function saveImprintData() {
+      lastLocalImprintSavedAt = Date.now();
       localStorage.setItem("lmg_imprint_v1", JSON.stringify(imprintData));
       queueCloudSync();
     }
 
     function adminSaveImprintFromForm() {
       if (!isAdmin()) return alert("Nur Admins dürfen das Impressum bearbeiten.");
+      const opEl = document.getElementById("adminImpOperator");
+      const addrEl = document.getElementById("adminImpAddress");
+      const mailEl = document.getElementById("adminImpEmail");
+      const roleEl = document.getElementById("adminImpRole");
+      const discEl = document.getElementById("adminImpDisclaimer");
+      const privEl = document.getElementById("adminImpPrivacy");
+
       imprintData = {
-        operatorName: document.getElementById("adminImpOperator")?.value.trim() || defaultImprintData.operatorName,
-        address: document.getElementById("adminImpAddress")?.value.trim() || "",
-        email: document.getElementById("adminImpEmail")?.value.trim() || "",
-        websiteRole: document.getElementById("adminImpRole")?.value.trim() || "",
-        disclaimer: document.getElementById("adminImpDisclaimer")?.value.trim() || "",
-        privacyNote: document.getElementById("adminImpPrivacy")?.value.trim() || ""
+        operatorName: (opEl ? opEl.value : imprintData.operatorName).trim() || defaultImprintData.operatorName,
+        address: (addrEl ? addrEl.value : imprintData.address).trim(),
+        email: (mailEl ? mailEl.value : imprintData.email).trim(),
+        websiteRole: (roleEl ? roleEl.value : imprintData.websiteRole).trim(),
+        disclaimer: (discEl ? discEl.value : imprintData.disclaimer).trim(),
+        privacyNote: (privEl ? privEl.value : imprintData.privacyNote).trim()
       };
       saveImprintData();
+
       const fb = document.getElementById("adminImprintSavedMsg");
       if (fb) {
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Impressum gespeichert und mit der Cloud synchronisiert!</div>`;
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Impressum gespeichert und synchronisiert!</div>`;
       }
     }
 
@@ -4288,51 +4311,43 @@
         });
 
         if (count === 0) {
-          fb.innerHTML = `<div class="result-banner result-err">Keine gültige Formel im Code gefunden.</div>`;
+          fb.innerHTML = `<div class="result-banner result-err">Keine gültige Formel gefunden (title &amp; formula nötig).</div>`;
           return;
         }
 
         saveCustomFormulas();
-        activeCalcTab = "ai-custom";
-        activeFormulaCategoryFilter = "ALL";
         renderSidebar();
         renderView();
       } catch (e) {
-        fb.innerHTML = `<div class="result-banner result-err">Ungültiger Formel-Code: ${e.message}</div>`;
+        fb.innerHTML = `<div class="result-banner result-err">Formel-Code ungültig (JSON prüfen): ${e.message}</div>`;
       }
     }
 
+    function runCustomFormulaCalc(cfId) {
+      const cf = customFormulas.find(x => x.id === cfId);
+      if (!cf) return;
+      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value) || 0;
+      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value) || 0;
+      let res = 0;
+      if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : 0;
+      else if (cf.formulaType === "add") res = v1 + v2;
+      else res = v1 * v2;
+
+      const box = document.getElementById("cfres-" + cfId);
+      box.innerHTML = `<div class="result-banner result-ok">$$\\text{Ergebnis} = ${res.toFixed(2)}$$</div>`;
+      typesetMath(box);
+    }
+
     function deleteCustomFormula(cfId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
+      if (!isAdmin()) return;
       customFormulas = customFormulas.filter(x => x.id !== cfId);
       saveCustomFormulas();
       renderSidebar();
       renderView();
     }
 
-    function runCustomFormulaCalc(cfId) {
-      const cf = customFormulas.find(x => x.id === cfId);
-      if (!cf) return;
-      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value);
-      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value);
-      if (isNaN(v1) || isNaN(v2)) return;
-
-      let res = 0;
-      if (cf.formulaType === "mul") res = v1 * v2;
-      else if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : NaN;
-      else res = v1 + v2;
-
-      const out = document.getElementById("cfres-" + cfId);
-      if (isNaN(res)) {
-        out.innerHTML = `<div class="result-banner result-err">Division durch 0 nicht möglich.</div>`;
-      } else {
-        out.innerHTML = `<div class="result-banner result-ok">Ergebnis: ${Number.isInteger(res) ? res : res.toFixed(3)}</div>`;
-      }
-    }
-
-    applyScreenVisibility();
-    typesetMath();
     initCloudRealtime();
+    applyScreenVisibility();
   </script>
 </body>
 </html>
