@@ -6,7 +6,13 @@
   <title>Lernen mit Gerry – Privates Lernportal</title>
   <script>
     window.MathJax = {
-      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] }
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      startup: {
+        typeset: false
+      }
     };
   </script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -429,17 +435,47 @@
       justify-content: space-between; gap: 14px;
     }
 
-    /* FORMULA & TRAINER */
+    /* FORMULA & TRAINER (SCREENSHOT-STIL) */
     .tab-strip {
       display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
       border-bottom: 1px solid var(--border); padding-bottom: 12px;
     }
     .formula-box {
-      background: var(--bg-input); border: 1px solid var(--border);
-      border-left: 4px solid var(--accent); border-radius: 10px;
-      padding: 14px; font-family: "Courier New", monospace; font-size: 15px;
-      font-weight: 700; margin: 10px 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 18px;
+      margin: 14px 0;
+      text-align: center;
+      font-size: 20px;
+      color: var(--text-main);
+      overflow-x: auto;
     }
+    .var-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13.5px;
+    }
+    .var-table th {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+    .var-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .var-table tr:last-child td { border-bottom: none; }
+    .var-sym {
+      font-weight: 800;
+      color: #15803d;
+      width: 90px;
+    }
+    [data-theme="dark"] .var-sym { color: #4ade80; }
+
     .result-banner {
       padding: 12px 16px; border-radius: 10px; font-weight: 700; margin-top: 12px; font-size: 14px;
     }
@@ -742,6 +778,13 @@
   </div>
 
   <script>
+    function typesetMath(el) {
+      if (window.MathJax && typeof window.MathJax.typesetPromise === "function") {
+        const targets = el ? [el] : undefined;
+        window.MathJax.typesetPromise(targets).catch(() => {});
+      }
+    }
+
     /* ==========================================================
        1. BENUTZER- & PRÜFUNGS-DATENBANK
        ========================================================== */
@@ -821,14 +864,14 @@
           {
             id: "f-diff", name: "Differentialrechnung",
             questions: [
-              { id: "q1", type: "mc", question: "Was ist die erste Ableitung von f(x) = 3x⁴ - 2x + 7?", options: ["12x³ - 2", "12x³ - 2x", "3x³ - 2", "12x⁴ - 2"], correct: "12x³ - 2", explanation: "Potenzregel: 4·3x³ - 1·2x⁰ + 0 = 12x³ - 2." },
-              { id: "q2", type: "calc", question: "Berechne die Steigung f'(2) für f(x) = x² + 3x.", answer: "7", explanation: "f'(x) = 2x + 3 → f'(2) = 2·2 + 3 = 7." }
+              { id: "q1", type: "mc", question: "Was ist die erste Ableitung von $f(x) = 3x^4 - 2x + 7$?", options: ["$12x^3 - 2$", "$12x^3 - 2x$", "$3x^3 - 2$", "$12x^4 - 2$"], correct: "$12x^3 - 2$", explanation: "Potenzregel: $4 \\cdot 3x^3 - 2 = 12x^3 - 2$." },
+              { id: "q2", type: "calc", question: "Berechne die Steigung $f'(2)$ für $f(x) = x^2 + 3x$.", answer: "7", explanation: "$f'(x) = 2x + 3 \\Rightarrow f'(2) = 2 \\cdot 2 + 3 = 7$." }
             ]
           },
           {
             id: "f-trig", name: "Trigonometrie & Vektoren",
             questions: [
-              { id: "q3", type: "mc", question: "Welchen Wert hat sin(90°)?", options: ["0", "0,5", "1", "-1"], correct: "1", explanation: "Am Einheitskreis entspricht 90° dem y-Wert 1." }
+              { id: "q3", type: "mc", question: "Welchen Wert hat $\\sin(90^\\circ)$?", options: ["$0$", "$0{,}5$", "$1$", "$-1$"], correct: "$1$", explanation: "Am Einheitskreis entspricht $90^\\circ$ dem $y$-Wert $1$." }
             ]
           }
         ]
@@ -846,7 +889,7 @@
           {
             id: "f-cnc", name: "Zerspanung & CNC",
             questions: [
-              { id: "q5", type: "calc", question: "Berechne die Drehzahl n (in 1/min) bei vc = 157 m/min und d = 50 mm (π ≈ 3,14).", answer: "1000", explanation: "n = (vc · 1000) / (d · π) = 157000 / 157 = 1000 1/min." }
+              { id: "q5", type: "calc", question: "Berechne die Drehzahl $n$ (in $\\text{min}^{-1}$) bei $v_c = 157\\text{ m/min}$ und $d = 50\\text{ mm}$ ($\\pi \\approx 3{,}14$).", answer: "1000", explanation: "$n = \\dfrac{v_c \\cdot 1000}{d \\cdot \\pi} = \\dfrac{157000}{157} = 1000\\text{ min}^{-1}$." }
             ]
           }
         ]
@@ -858,7 +901,7 @@
           {
             id: "f-statik", name: "Statik & Kräftesysteme",
             questions: [
-              { id: "q6", type: "calc", question: "Eine Kraft F = 250 N wirkt an einem Hebelarm l = 0,4 m senkrecht. Moment M in Nm?", answer: "100", explanation: "M = F · l = 250 N · 0,4 m = 100 Nm." }
+              { id: "q6", type: "calc", question: "Eine Kraft $F = 250\\text{ N}$ wirkt an einem Hebelarm $l = 0{,}4\\text{ m}$ senkrecht. Moment $M$ in $\\text{Nm}$?", answer: "100", explanation: "$M = F \\cdot l = 250\\text{ N} \\cdot 0{,}4\\text{ m} = 100\\text{ Nm}$." }
             ]
           }
         ]
@@ -870,7 +913,7 @@
           {
             id: "f-ohm", name: "Gleichstrom & Ohmsches Gesetz",
             questions: [
-              { id: "q7", type: "calc", question: "Widerstand R = 20 Ω an U = 230 V. Berechne Strom I in Ampere.", answer: "11.5", explanation: "I = U / R = 230 V / 20 Ω = 11,5 A." }
+              { id: "q7", type: "calc", question: "Widerstand $R = 20\\text{ }\\Omega$ an $U = 230\\text{ V}$. Berechne Strom $I$ in Ampere.", answer: "11.5", explanation: "$I = \\dfrac{U}{R} = \\dfrac{230\\text{ V}}{20\\text{ }\\Omega} = 11{,}5\\text{ A}$." }
             ]
           }
         ]
@@ -1190,7 +1233,7 @@
     }
 
     /* ==========================================================
-       6. ABLEITUNGSTRAINER & FORMELRECHNER
+       6. ABLEITUNGSTRAINER & FORMELRECHNER (MIT MATHJAX)
        ========================================================== */
     function renderSpickzettelAbleitungenCard() {
       return `
@@ -1201,19 +1244,19 @@
               <thead>
                 <tr>
                   <th>Regel / Funktion</th>
-                  <th>Ausgangsfunktion f(x)</th>
-                  <th>1. Ableitung f'(x)</th>
+                  <th>Ausgangsfunktion $f(x)$</th>
+                  <th>1. Ableitung $f'(x)$</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td class="spickzettel-rule-name">Potenzregel</td><td class="spickzettel-math">$c \\cdot x^n$</td><td class="spickzettel-math">$c \\cdot n \\cdot x^{n-1}$</td></tr>
-                <tr><td class="spickzettel-rule-name">Bruchfunktion</td><td class="spickzettel-math">$\\dfrac{a}{x^n} = a \\cdot x^{-n}$</td><td class="spickzettel-math">$-\\dfrac{a \\cdot n}{x^{n+1}}$</td></tr>
-                <tr><td class="spickzettel-rule-name">Wurzelfunktion</td><td class="spickzettel-math">$\\sqrt{x} = x^{1/2}$</td><td class="spickzettel-math">$\\dfrac{1}{2\\sqrt{x}}$</td></tr>
-                <tr><td class="spickzettel-rule-name">Trigonometrie</td><td class="spickzettel-math">$\\sin(x) \\mid \\cos(x) \\mid \\tan(x)$</td><td class="spickzettel-math">$\\cos(x) \\mid -\\sin(x) \\mid \\dfrac{1}{\\cos^2(x)}$</td></tr>
-                <tr><td class="spickzettel-rule-name">e-Funktion &amp; ln</td><td class="spickzettel-math">$e^x \\mid \\ln(x)$</td><td class="spickzettel-math">$e^x \\mid \\dfrac{1}{x}$</td></tr>
-                <tr><td class="spickzettel-rule-name">Produktregel</td><td class="spickzettel-math">$u(x) \\cdot v(x)$</td><td class="spickzettel-math">$u'(x) \\cdot v(x) + u(x) \\cdot v'(x)$</td></tr>
-                <tr><td class="spickzettel-rule-name">Quotientenregel</td><td class="spickzettel-math">$\\dfrac{u(x)}{v(x)}$</td><td class="spickzettel-math">$\\dfrac{u'(x) \\cdot v(x) - u(x) \\cdot v'(x)}{[v(x)]^2}$</td></tr>
-                <tr><td class="spickzettel-rule-name">Kettenregel</td><td class="spickzettel-math">$u(v(x))$</td><td class="spickzettel-math">$u'(v(x)) \\cdot v'(x)$</td></tr>
+                <tr><td class="spickzettel-rule-name">Potenzregel</td><td class="spickzettel-math">$$c \\cdot x^n$$</td><td class="spickzettel-math">$$c \\cdot n \\cdot x^{n-1}$$</td></tr>
+                <tr><td class="spickzettel-rule-name">Bruchfunktion</td><td class="spickzettel-math">$$\\frac{a}{x^n} = a \\cdot x^{-n}$$</td><td class="spickzettel-math">$$-\\frac{a \\cdot n}{x^{n+1}}$$</td></tr>
+                <tr><td class="spickzettel-rule-name">Wurzelfunktion</td><td class="spickzettel-math">$$\\sqrt{x} = x^{1/2}$$</td><td class="spickzettel-math">$$\\frac{1}{2\\sqrt{x}}$$</td></tr>
+                <tr><td class="spickzettel-rule-name">Trigonometrie</td><td class="spickzettel-math">$$\\sin(x),\\; \\cos(x),\\; \\tan(x)$$</td><td class="spickzettel-math">$$\\cos(x),\\; -\\sin(x),\\; \\frac{1}{\\cos^2(x)}$$</td></tr>
+                <tr><td class="spickzettel-rule-name">e-Funktion &amp; ln</td><td class="spickzettel-math">$$e^x,\\; \\ln(x)$$</td><td class="spickzettel-math">$$e^x,\\; \\frac{1}{x}$$</td></tr>
+                <tr><td class="spickzettel-rule-name">Produktregel</td><td class="spickzettel-math">$$u(x) \\cdot v(x)$$</td><td class="spickzettel-math">$$u'(x) \\cdot v(x) + u(x) \\cdot v'(x)$$</td></tr>
+                <tr><td class="spickzettel-rule-name">Quotientenregel</td><td class="spickzettel-math">$$\\frac{u(x)}{v(x)}$$</td><td class="spickzettel-math">$$\\frac{u'(x) \\cdot v(x) - u(x) \\cdot v'(x)}{[v(x)]^2}$$</td></tr>
+                <tr><td class="spickzettel-rule-name">Kettenregel</td><td class="spickzettel-math">$$u(v(x))$$</td><td class="spickzettel-math">$$u'(v(x)) \\cdot v'(x)$$</td></tr>
               </tbody>
             </table>
           </div>
@@ -1265,39 +1308,42 @@
       const selectedLevel = document.getElementById("derivLevel")?.value || "poly";
       const levels = ["poly", "chain", "exp"];
       const level = selectedLevel === "all" ? levels[Math.floor(Math.random() * levels.length)] : selectedLevel;
-      let fnText = "", derivText = "", hintText = "", badgeText = "";
+      let fnLatex = "", answerPlain = "", answerLatex = "", hintLatex = "", badgeText = "";
       const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
       if (level === "poly") {
         const a = rand(2, 6), n = rand(2, 5), b = rand(2, 9);
-        fnText = `f(x) = ${a}x^${n} + ${b}x`;
-        derivText = `${a * n}x^${n - 1} + ${b}`;
-        hintText = `Potenzregel: (${a}·${n})x^(${n}-1) + ${b}`;
+        fnLatex = `f(x) = ${a}x^{${n}} + ${b}x`;
+        answerPlain = `${a * n}x^${n - 1} + ${b}`;
+        answerLatex = `f'(x) = ${a * n}x^{${n - 1}} + ${b}`;
+        hintLatex = `Potenzregel: $(${a} \\cdot ${n})x^{${n}-1} + ${b}$`;
         badgeText = "Polynom / Potenzregel";
       } else if (level === "chain") {
         const a = rand(2, 5), k = rand(2, 4);
-        fnText = `f(x) = ${a} · sin(${k}x)`;
-        derivText = `${a * k}cos(${k}x)`;
-        hintText = `Kettenregel: Innere Ableitung (${k}) · äußere Ableitung (${a}·cos(${k}x))`;
+        fnLatex = `f(x) = ${a} \\cdot \\sin(${k}x)`;
+        answerPlain = `${a * k}cos(${k}x)`;
+        answerLatex = `f'(x) = ${a * k}\\cos(${k}x)`;
+        hintLatex = `Kettenregel: Innere Ableitung ($${k}$) $\\cdot$ äußere Ableitung ($${a}\\cos(${k}x)$)`;
         badgeText = "Sinus & Kettenregel";
       } else {
         const a = rand(2, 6), k = rand(2, 5);
-        fnText = `f(x) = ${a} · e^(${k}x)`;
-        derivText = `${a * k}e^(${k}x)`;
-        hintText = `Exponential- & Kettenregel: ${a} · ${k} · e^(${k}x)`;
+        fnLatex = `f(x) = ${a} \\cdot e^{${k}x}`;
+        answerPlain = `${a * k}e^(${k}x)`;
+        answerLatex = `f'(x) = ${a * k}e^{${k}x}`;
+        hintLatex = `Exponential- & Kettenregel: $${a} \\cdot ${k} \\cdot e^{${k}x}$`;
         badgeText = "e-Funktion & Kettenregel";
       }
 
-      currentDerivativeTask = { fnText, derivText, hintText };
+      currentDerivativeTask = { fnLatex, answerPlain, answerLatex, hintLatex };
       const box = document.getElementById("derivTaskDisplay");
       if (box) {
         box.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-            <span style="font-size:13px; color:var(--text-muted);">Bilde die 1. Ableitung f'(x) für:</span>
+            <span style="font-size:13px; color:var(--text-muted);">Bilde die 1. Ableitung $f'(x)$ für:</span>
             ${selectedLevel === "all" ? `<span class="count-pill">🎲 Mix: ${badgeText}</span>` : ""}
           </div>
-          <div class="formula-box" style="font-size:20px;">${fnText}</div>
-          <label style="font-size:13px; font-weight:600;">Deine Lösung für f'(x) (z. B. 12x^2 + 4):</label>
+          <div class="formula-box">$$${fnLatex}$$</div>
+          <label style="font-size:13px; font-weight:600;">Deine Lösung für $f'(x)$ (z. B. 12x^2 + 4):</label>
           <input type="text" id="derivUserAnswer" class="input-field" placeholder="f'(x) eingeben...">
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button class="btn-primary" onclick="checkDerivativeAnswer()">✅ Prüfen</button>
@@ -1306,16 +1352,17 @@
           </div>
           <div id="derivFeedback"></div>
         `;
+        typesetMath(box);
       }
     }
 
     function normalizeMath(str) {
-      return str.toLowerCase().replace(/\s+/g, "").replace(/\*/g, "").replace(/\^1(?!\d)/g, "");
+      return str.toLowerCase().replace(/\s+/g, "").replace(/\*/g, "").replace(/[{}]/g, "").replace(/\^1(?!\d)/g, "");
     }
 
     function checkDerivativeAnswer() {
       const userVal = normalizeMath(document.getElementById("derivUserAnswer").value);
-      const correctVal = normalizeMath(currentDerivativeTask.derivText);
+      const correctVal = normalizeMath(currentDerivativeTask.answerPlain);
       const fb = document.getElementById("derivFeedback");
       if (!userVal) return;
 
@@ -1323,51 +1370,95 @@
         currentUser.points += 15;
         saveUsers();
         renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben. (${currentDerivativeTask.hintText})</div>`;
+        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben. (${currentDerivativeTask.hintLatex})</div>`;
       } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Noch nicht ganz. Tipp: ${currentDerivativeTask.hintText}</div>`;
+        fb.innerHTML = `<div class="result-banner result-err">❌ Noch nicht ganz. Tipp: ${currentDerivativeTask.hintLatex}</div>`;
       }
+      typesetMath(fb);
     }
 
     function showDerivativeSolution() {
-      document.getElementById("derivFeedback").innerHTML =
-        `<div class="result-banner" style="background:var(--accent-soft); color:var(--accent);">Musterlösung: <strong>f'(x) = ${currentDerivativeTask.derivText}</strong><br><span style="font-size:12px; font-weight:400;">${currentDerivativeTask.hintText}</span></div>`;
+      const fb = document.getElementById("derivFeedback");
+      fb.innerHTML = `<div class="result-banner" style="background:var(--accent-soft); color:var(--accent);">Musterlösung: $$${currentDerivativeTask.answerLatex}$$<div style="font-size:12.5px; font-weight:500; margin-top:4px;">${currentDerivativeTask.hintLatex}</div></div>`;
+      typesetMath(fb);
     }
 
     let activeCalcTab = "cutting";
     function renderCalculatorContent() {
       if (activeCalcTab === "cutting") {
         return `
-          <h4>⚙️ Schnittgeschwindigkeit &amp; Drehzahl (Zerspanung)</h4>
-          <div class="formula-box">n = (v_c · 1000) / (d · π)</div>
+          <span class="count-pill">Zerspanung</span>
+          <h3 style="margin-top:8px;">Schnittgeschwindigkeit &amp; Drehzahl</h3>
+          <div class="formula-box">$$n = \\frac{v_c \\cdot 1000}{d \\cdot \\pi}$$</div>
+          <h4 style="margin-bottom:4px;">Erklärung</h4>
+          <p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">
+            Mit dieser Formel berechnest du die passende Spindeldrehzahl $n$ beim Drehen, Fräsen oder Bohren aus Schnittgeschwindigkeit $v_c$ und Werkstück- bzw. Werkzeugdurchmesser $d$.
+          </p>
+          <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
+          <table class="var-table" style="margin-bottom:16px;">
+            <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
+            <tbody>
+              <tr><td class="var-sym">$n$</td><td>Drehzahl in $\\text{min}^{-1}$ ($1/\\text{min}$)</td></tr>
+              <tr><td class="var-sym">$v_c$</td><td>Schnittgeschwindigkeit in $\\text{m/min}$</td></tr>
+              <tr><td class="var-sym">$d$</td><td>Durchmesser in $\\text{mm}$ ($d > 0$)</td></tr>
+            </tbody>
+          </table>
           <div class="form-grid-2">
-            <div><label style="font-size:13px; font-weight:600;">Schnittgeschwindigkeit v_c [m/min]</label><input type="number" id="calcVc" class="input-field" value="180"></div>
-            <div><label style="font-size:13px; font-weight:600;">Durchmesser d [mm]</label><input type="number" id="calcD" class="input-field" value="40"></div>
+            <div><label style="font-size:13px; font-weight:600;">Schnittgeschwindigkeit $v_c$ [m/min]</label><input type="number" id="calcVc" class="input-field" value="180"></div>
+            <div><label style="font-size:13px; font-weight:600;">Durchmesser $d$ [mm]</label><input type="number" id="calcD" class="input-field" value="40"></div>
           </div>
-          <button class="btn-primary" onclick="calcCuttingSpeed()">Drehzahl n berechnen</button>
+          <button class="btn-primary" onclick="calcCuttingSpeed()">Drehzahl $n$ berechnen</button>
           <div id="calcResultBox"></div>
         `;
       } else if (activeCalcTab === "ohm") {
         return `
-          <h4>⚡ Ohmsches Gesetz &amp; Elektrische Leistung</h4>
-          <div class="formula-box">I = U / R   |   P = U · I</div>
+          <span class="count-pill">Elektrotechnik</span>
+          <h3 style="margin-top:8px;">Ohmsches Gesetz &amp; Leistung</h3>
+          <div class="formula-box">$$I = \\frac{U}{R}, \\qquad P = U \\cdot I$$</div>
+          <h4 style="margin-bottom:4px;">Erklärung</h4>
+          <p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">
+            Bei linearen ohmschen Verbrauchern ist die elektrische Stromstärke $I$ proportional zur Spannung $U$ und umgekehrt proportional zum Widerstand $R$.
+          </p>
+          <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
+          <table class="var-table" style="margin-bottom:16px;">
+            <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
+            <tbody>
+              <tr><td class="var-sym">$U$</td><td>Elektrische Spannung in Volt ($\\text{V}$)</td></tr>
+              <tr><td class="var-sym">$R$</td><td>Elektrischer Widerstand in Ohm ($\\Omega$, $R > 0$)</td></tr>
+              <tr><td class="var-sym">$I, P$</td><td>Stromstärke in Ampere ($\\text{A}$) und Wirkleistung in Watt ($\\text{W}$)</td></tr>
+            </tbody>
+          </table>
           <div class="form-grid-2">
-            <div><label style="font-size:13px; font-weight:600;">Spannung U [Volt]</label><input type="number" id="calcU" class="input-field" value="230"></div>
-            <div><label style="font-size:13px; font-weight:600;">Widerstand R [Ohm]</label><input type="number" id="calcR" class="input-field" value="46"></div>
+            <div><label style="font-size:13px; font-weight:600;">Spannung $U$ [V]</label><input type="number" id="calcU" class="input-field" value="230"></div>
+            <div><label style="font-size:13px; font-weight:600;">Widerstand $R$ [$\\Omega$]</label><input type="number" id="calcR" class="input-field" value="46"></div>
           </div>
           <button class="btn-primary" onclick="calcOhm()">Strom &amp; Leistung berechnen</button>
           <div id="calcResultBox"></div>
         `;
       } else {
         return `
-          <h4>📐 Quadratische Gleichung</h4>
-          <div class="formula-box">a·x² + b·x + c = 0   →   x₁,₂ = (-b ± √(b² - 4ac)) / (2a)</div>
+          <span class="count-pill">Algebra</span>
+          <h3 style="margin-top:8px;">Mitternachtsformel (abc-Formel)</h3>
+          <div class="formula-box">$$x_{1,2} = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$</div>
+          <h4 style="margin-bottom:4px;">Erklärung</h4>
+          <p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">
+            Mit der abc-Formel löst du allgemeine quadratische Gleichungen der Form $ax^2 + bx + c = 0$. Der Term unter der Wurzel ($D = b^2 - 4ac$) heißt Diskriminante und gibt an, wie viele reelle Lösungen existieren.
+          </p>
+          <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
+          <table class="var-table" style="margin-bottom:16px;">
+            <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
+            <tbody>
+              <tr><td class="var-sym">$a$</td><td>Koeffizient vor $x^2$ ($a \\neq 0$)</td></tr>
+              <tr><td class="var-sym">$b$</td><td>Koeffizient vor $x$</td></tr>
+              <tr><td class="var-sym">$c$</td><td>Absolutes Glied (Konstante)</td></tr>
+            </tbody>
+          </table>
           <div class="form-grid-2" style="grid-template-columns: repeat(3, 1fr);">
-            <div><label style="font-size:13px; font-weight:600;">a</label><input type="number" id="calcA" class="input-field" value="1"></div>
-            <div><label style="font-size:13px; font-weight:600;">b</label><input type="number" id="calcB" class="input-field" value="-5"></div>
-            <div><label style="font-size:13px; font-weight:600;">c</label><input type="number" id="calcC" class="input-field" value="6"></div>
+            <div><label style="font-size:13px; font-weight:600;">$a$</label><input type="number" id="calcA" class="input-field" value="1"></div>
+            <div><label style="font-size:13px; font-weight:600;">$b$</label><input type="number" id="calcB" class="input-field" value="-5"></div>
+            <div><label style="font-size:13px; font-weight:600;">$c$</label><input type="number" id="calcC" class="input-field" value="6"></div>
           </div>
-          <button class="btn-primary" onclick="calcQuadratic()">Nullstellen x₁, x₂ berechnen</button>
+          <button class="btn-primary" onclick="calcQuadratic()">Lösungen $x_1, x_2$ berechnen</button>
           <div id="calcResultBox"></div>
         `;
       }
@@ -1377,14 +1468,18 @@
       const vc = parseFloat(document.getElementById("calcVc").value);
       const d = parseFloat(document.getElementById("calcD").value);
       if (!vc || !d || d <= 0) return;
-      document.getElementById("calcResultBox").innerHTML = `<div class="result-banner result-ok">Drehzahl n = ${((vc * 1000) / (d * Math.PI)).toFixed(1)} 1/min</div>`;
+      const box = document.getElementById("calcResultBox");
+      box.innerHTML = `<div class="result-banner result-ok">$$n = ${((vc * 1000) / (d * Math.PI)).toFixed(1)}\\text{ min}^{-1}$$</div>`;
+      typesetMath(box);
     }
     function calcOhm() {
       const u = parseFloat(document.getElementById("calcU").value);
       const r = parseFloat(document.getElementById("calcR").value);
       if (!r || r <= 0) return;
       const i = u / r;
-      document.getElementById("calcResultBox").innerHTML = `<div class="result-banner result-ok">Strom I = ${i.toFixed(2)} A  |  Leistung P = ${(u * i).toFixed(1)} W</div>`;
+      const box = document.getElementById("calcResultBox");
+      box.innerHTML = `<div class="result-banner result-ok">$$I = ${i.toFixed(2)}\\text{ A}, \\qquad P = ${(u * i).toFixed(1)}\\text{ W}$$</div>`;
+      typesetMath(box);
     }
     function calcQuadratic() {
       const a = parseFloat(document.getElementById("calcA").value);
@@ -1393,12 +1488,18 @@
       if (!a) return;
       const disc = b * b - 4 * a * c;
       const box = document.getElementById("calcResultBox");
-      if (disc < 0) box.innerHTML = `<div class="result-banner result-err">Keine reelle Lösung (D = ${disc.toFixed(2)} < 0)</div>`;
-      else box.innerHTML = `<div class="result-banner result-ok">x₁ = ${((-b + Math.sqrt(disc)) / (2 * a)).toFixed(3)}   |   x₂ = ${((-b - Math.sqrt(disc)) / (2 * a)).toFixed(3)}</div>`;
+      if (disc < 0) {
+        box.innerHTML = `<div class="result-banner result-err">Keine reelle Lösung ($$D = ${disc.toFixed(2)} < 0$$)</div>`;
+      } else {
+        const x1 = ((-b + Math.sqrt(disc)) / (2 * a)).toFixed(3);
+        const x2 = ((-b - Math.sqrt(disc)) / (2 * a)).toFixed(3);
+        box.innerHTML = `<div class="result-banner result-ok">$$x_1 = ${x1}, \\qquad x_2 = ${x2}$$</div>`;
+      }
+      typesetMath(box);
     }
 
     /* ==========================================================
-       7. FRAGEN IN UNTERORDNER EINFÜGEN & LÖSEN
+       7. FRAGEN & UNTERORDNER EINFÜGEN & LÖSEN
        ========================================================== */
     function addQuestionToFolder(subId, folderId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Fragen erstellen.");
@@ -1452,9 +1553,17 @@
     function createNewFolder(subId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Unterordner erstellen.");
       const sub = subjects.find(s => s.id === subId);
-      const name = document.getElementById("newFolderNameInput").value.trim();
-      if (!name) return;
-      sub.folders.push({ id: "f-" + Date.now(), name, questions: [] });
+      if (!sub) return;
+      const inputEl = document.getElementById("newFolderNameInput");
+      const name = inputEl ? inputEl.value.trim() : "";
+      if (!name) {
+        alert("Bitte zuerst einen Namen für den neuen Unterordner eingeben!");
+        inputEl?.focus();
+        return;
+      }
+      const newFolder = { id: "f-" + Date.now(), name, questions: [] };
+      sub.folders.push(newFolder);
+      activeFolderId = newFolder.id;
       saveSubjects();
       renderSidebar();
       renderView();
@@ -1472,6 +1581,7 @@
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig wäre: ${expected}) – ${explanation}</div>`;
       }
+      typesetMath(fb);
     }
 
     function checkMcQuestion(qId, chosen, expected, explanation) {
@@ -1484,6 +1594,7 @@
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expected}) – ${explanation}</div>`;
       }
+      typesetMath(fb);
     }
 
     /* ==========================================================
@@ -1536,7 +1647,7 @@
               <div style="width:44px; height:44px; border-radius:12px; background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">📈</div>
               <div>
                 <h3 style="font-size:16px; margin-bottom:4px;">Ableitungstrainer &amp; Rechner</h3>
-                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Endlos-Aufgaben für f'(x) und technische Formelrechner.</p>
+                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Endlos-Aufgaben für $f'(x)$ und technische Formelrechner.</p>
                 <button class="btn-secondary" onclick="navigate('derivative-trainer')">Trainer öffnen →</button>
               </div>
             </div>
@@ -1713,8 +1824,8 @@
         container.innerHTML = `
           <div class="card">
             <div class="tab-strip">
-              <button class="btn-secondary" style="${activeCalcTab === 'cutting' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='cutting'; renderView();">⚙️ Zerspanung (n / v_c)</button>
-              <button class="btn-secondary" style="${activeCalcTab === 'ohm' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='ohm'; renderView();">⚡ Elektrotechnik (U / R / I)</button>
+              <button class="btn-secondary" style="${activeCalcTab === 'cutting' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='cutting'; renderView();">⚙️ Zerspanung ($n, v_c$)</button>
+              <button class="btn-secondary" style="${activeCalcTab === 'ohm' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='ohm'; renderView();">⚡ Elektrotechnik ($U, R, I$)</button>
               <button class="btn-secondary" style="${activeCalcTab === 'quad' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='quad'; renderView();">📐 Quadratische Gleichung</button>
               <button class="btn-secondary" style="${activeCalcTab === 'ai-custom' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='ai-custom'; renderView();">🤖 KI-Formeln (${customFormulas.length})</button>
             </div>
@@ -1728,7 +1839,7 @@
                       ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${cf.id}')">Löschen</button>` : ""}
                     </div>
                     <h4 style="margin-top:6px;">${cf.title}</h4>
-                    <div class="formula-box">${cf.formula}</div>
+                    <div class="formula-box">$$${cf.formula}$$</div>
                     ${cf.description ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">${cf.description}</p>` : ""}
                     <div class="form-grid-2">
                       <div><label style="font-size:12px; font-weight:600;">${cf.var1Label}</label><input type="number" id="cfv1-${cf.id}" class="input-field" value="${cf.var1Default}"></div>
@@ -1752,7 +1863,7 @@
                 </div>
                 <button class="btn-secondary" onclick="copyAiPromptForFormula()">📋 Formel-Prompt kopieren</button>
               </div>
-              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F · l","description":"Hebelgesetz","var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}'></textarea>
+              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Hebelgesetz","var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}'></textarea>
               <button class="btn-primary" onclick="importAiFormulaCode()">⚡ Formel-Code direkt einfügen</button>
               <div id="aiFormulaMsg"></div>
             </div>
@@ -1794,9 +1905,9 @@
                 <h3 style="margin-top:8px;">Unterordner in ${sub.name}</h3>
               </div>
               ${isAdmin() ? `
-              <div style="display:flex; gap:8px;">
-                <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:190px;" placeholder="Neuer Unterordner...">
-                <button class="btn-primary" onclick="createNewFolder('${sub.id}')">+ Ordner</button>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:200px;" placeholder="Neuer Unterordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createNewFolder('${sub.id}');}">
+                <button type="button" class="btn-primary" onclick="createNewFolder('${sub.id}')">+ Ordner</button>
               </div>
               ` : ""}
             </div>
@@ -2045,9 +2156,7 @@
         `;
       }
 
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        MathJax.typesetPromise([container]).catch(() => {});
-      }
+      typesetMath(container);
     }
 
     function renderQuestionBlock(q, num, canDelete, subId = "", folderId = "") {
@@ -2308,6 +2417,7 @@
 
     // Initiales Rendering
     updateTopStatusBar();
+    typesetMath();
   </script>
 </body>
 </html>
