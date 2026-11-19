@@ -727,6 +727,40 @@
       color: var(--text-muted);
       line-height: 1.38;
     }
+    .exam-timer-pill {
+      background: var(--bg-card);
+      border: 1.5px solid var(--accent);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 13.5px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .exam-timer-pill.urgent {
+      border-color: #ef4444;
+      background: var(--danger-bg);
+      color: var(--danger-text);
+    }
+    .mc-option.selected-choice {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      font-weight: 700;
+    }
+    .history-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+    }
 
     .fav-grid {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -1075,7 +1109,7 @@
           <span class="count-pill" id="sidebarExamCount">2</span>
         </button>
         <button class="nav-item" onclick="navigate('custom-exam', this)">
-          <span class="nav-item-left">🎓 Eigene Prüfung</span>
+          <span class="nav-item-left">🎓 Prüfung &amp; Probeprüfung</span>
         </button>
         <button class="nav-item" onclick="navigate('derivative-trainer', this)">
           <span class="nav-item-left">📈 Ableitungstrainer</span>
@@ -1336,7 +1370,7 @@
       if (String(userObj.role).toLowerCase() === "admin") return true;
       if (vis === "public") return true;
       if (vis === "friends") return areUsersFriends(viewerId, ownerId);
-      return false; // "private"
+      return false;
     }
 
     function changeFolderVisibility(subId, folderId, newVisibility) {
@@ -1352,7 +1386,6 @@
       renderView();
     }
 
-    // Persönliche Bibliotheken pro Benutzer: { [userId]: ["subId::folderId", ...] }
     let userLibraries = JSON.parse(localStorage.getItem("lmg_user_libraries_v1") || "null") || {
       1: ["mathe::f-diff", "fertigung::f-waerme"]
     };
@@ -1388,7 +1421,7 @@
     }
 
     let folderSearchQuery = "";
-    let folderSearchVisibilityFilter = "ALL"; // "ALL" | "public" | "friends" | "private"
+    let folderSearchVisibilityFilter = "ALL";
     let folderSearchOnlyInLibrary = false;
 
     function getAllAccessibleFoldersWithMeta(userObj = currentUser) {
@@ -2327,6 +2360,7 @@
 
     function logoutUser(reason = "manual") {
       clearInactivityTimer();
+      stopExamTimerInterval();
       isAuthenticated = false;
       activeExamSession = null;
       activeFolderId = null;
@@ -2368,6 +2402,7 @@
             customRoles,
             subjects,
             exams,
+            examHistory,
             friendships,
             chatMessages,
             customFormulas,
@@ -2438,6 +2473,10 @@
         if (Array.isArray(d.exams)) {
           exams = normalizeExamsList(d.exams, currentUser?.id || 1);
           localStorage.setItem("lmg_exams_v1", JSON.stringify(exams));
+        }
+        if (Array.isArray(d.examHistory)) {
+          examHistory = d.examHistory;
+          localStorage.setItem("lmg_exam_history_v1", JSON.stringify(examHistory));
         }
         if (Array.isArray(d.friendships)) {
           friendships = d.friendships;
@@ -2514,6 +2553,7 @@
 
     function goToStartseite() {
       if (!isAuthenticated) return;
+      stopExamTimerInterval();
       isLoginScreenVisible = false;
       currentView = "home";
       applyScreenVisibility();
@@ -3339,12 +3379,65 @@
       renderView();
     }
 
+    // =========================================================================
+    // PRÜFUNG, PROBEPRÜFUNG, TIMER & VERLAUF
+    // =========================================================================
     let customExamQuestionCount = 10;
     let examQuestionMode = "mix";
+    let examSimulationMode = "probe"; // "practice" | "exam" | "probe"
+    let examDurationMinutes = 15;
+    let examPassThresholdPct = 60;
     let examScopeKey = "ALL";
     let examLengthPreset = "10";
     let masteredQuestionIds = new Set(JSON.parse(localStorage.getItem("lmg_mastered_q_v1") || "[]"));
     let activeExamSession = null;
+    let examTimerIntervalId = null;
+
+    let examHistory = JSON.parse(localStorage.getItem("lmg_exam_history_v1") || "[]");
+    function saveExamHistory() {
+      localStorage.setItem("lmg_exam_history_v1", JSON.stringify(examHistory));
+      queueCloudSync();
+    }
+
+    function stopExamTimerInterval() {
+      if (examTimerIntervalId) {
+        clearInterval(examTimerIntervalId);
+        examTimerIntervalId = null;
+      }
+    }
+
+    function formatSecondsMMSS(totalSec) {
+      const s = Math.max(0, Math.floor(Number(totalSec) || 0));
+      const m = Math.floor(s / 60);
+      const rem = s % 60;
+      return `${String(m).padStart(2, "0")}:${String(rem).padStart(2, "0")}`;
+    }
+
+    function startExamTimerInterval() {
+      stopExamTimerInterval();
+      if (!activeExamSession || activeExamSession.finished || !activeExamSession.hasTimer) return;
+
+      examTimerIntervalId = setInterval(() => {
+        if (!activeExamSession || activeExamSession.finished) {
+          stopExamTimerInterval();
+          return;
+        }
+        activeExamSession.remainingSec = Math.max(0, activeExamSession.remainingSec - 1);
+        updateExamTimerDom();
+
+        if (activeExamSession.remainingSec <= 0) {
+          stopExamTimerInterval();
+          finishExamSession(true);
+        }
+      }, 1000);
+    }
+
+    function updateExamTimerDom() {
+      const el = document.getElementById("examTimerBadge");
+      if (!el || !activeExamSession || !activeExamSession.hasTimer) return;
+      el.textContent = `⏱️ ${formatSecondsMMSS(activeExamSession.remainingSec)}`;
+      el.classList.toggle("urgent", activeExamSession.remainingSec <= 60);
+    }
 
     function saveMasteredQuestions() {
       localStorage.setItem("lmg_mastered_q_v1", JSON.stringify(Array.from(masteredQuestionIds)));
@@ -3487,6 +3580,18 @@
         if (!isNaN(parsed) && parsed >= 1) customExamQuestionCount = parsed;
       }
 
+      const durInput = document.getElementById("examDurationMinutesInput");
+      if (durInput) {
+        const parsedDur = parseInt(durInput.value, 10);
+        if (!isNaN(parsedDur) && parsedDur >= 1) examDurationMinutes = parsedDur;
+      }
+
+      const passInput = document.getElementById("examPassThresholdInput");
+      if (passInput) {
+        const parsedPass = parseInt(passInput.value, 10);
+        if (!isNaN(parsedPass) && parsedPass >= 1 && parsedPass <= 100) examPassThresholdPct = parsedPass;
+      }
+
       const pool = collectExamQuestionPool(visible, true);
       if (pool.length === 0) {
         alert("Für diese Filterkombination stehen aktuell keine Fragen zur Verfügung.");
@@ -3500,23 +3605,60 @@
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
 
+      const hasTimer = examSimulationMode === "exam" || examSimulationMode === "probe";
+      const totalDurationSec = hasTimer ? Math.max(60, (examDurationMinutes || 15) * 60) : 0;
+
       activeExamSession = {
+        mode: examSimulationMode, // "practice" | "exam" | "probe"
+        scopeLabel: examScopeKey === "ALL" ? "Alle Unterordner" : examScopeKey,
         questions: shuffled.slice(0, limit),
         answered: {},
-        finished: false
+        finished: false,
+        timedOut: false,
+        hasTimer,
+        totalDurationSec,
+        remainingSec: totalDurationSec,
+        passThresholdPct: examPassThresholdPct || 60,
+        startedAtMs: Date.now(),
+        pointsEarnedInSession: 0,
+        historySaved: false
       };
+
       renderView();
+      if (hasTimer) startExamTimerInterval();
     }
 
-    function submitExamQuestionAnswer(qId, givenAnswer, expectedAnswer, explanation, isMc) {
-      if (!activeExamSession) return;
-      const prev = activeExamSession.answered[qId];
-      let isRight = false;
+    function evaluateAnswerValue(q, givenAnswer) {
+      const expected = q.type === "mc" ? q.correct : q.answer;
+      if (q.type === "mc") {
+        return { isRight: givenAnswer === expected, expected };
+      }
+      const normGiven = String(givenAnswer || "").trim().replace(",", ".").toLowerCase();
+      const normExp = String(expected || "").trim().replace(",", ".").toLowerCase();
+      return { isRight: normGiven !== "" && normGiven === normExp, expected };
+    }
 
-      if (isMc) {
-        isRight = givenAnswer === expectedAnswer;
-      } else {
-        isRight = givenAnswer.trim().replace(",", ".").toLowerCase() === expectedAnswer.trim().replace(",", ".").toLowerCase();
+    function submitExamQuestionAnswer(qId, givenAnswer, explanation, isMc) {
+      if (!activeExamSession || activeExamSession.finished) return;
+      const q = activeExamSession.questions.find(item => item.id === qId);
+      if (!q) return;
+
+      const { isRight, expected } = evaluateAnswerValue(q, givenAnswer);
+      const prev = activeExamSession.answered[qId];
+
+      // In Probeprüfung ("probe") wird erst bei Abgabe ausgewertet & bepunktet
+      if (activeExamSession.mode === "probe") {
+        activeExamSession.answered[qId] = {
+          correct: isRight,
+          userAnswer: givenAnswer,
+          pointsAwarded: false
+        };
+        updateExamSummaryBar();
+        const fb = document.getElementById("exam-fb-" + qId);
+        if (fb) {
+          fb.innerHTML = `<div class="result-banner" style="background:var(--accent-soft); color:var(--accent);">📝 Antwort für Probeprüfung gespeichert (Auswertung erfolgt nach Abgabe).</div>`;
+        }
+        return;
       }
 
       let awarded = false;
@@ -3528,6 +3670,7 @@
           const res = recordLearningActivity(10);
           streakIncreased = res.streakIncreased;
           awarded = true;
+          activeExamSession.pointsEarnedInSession = (activeExamSession.pointsEarnedInSession || 0) + 10;
         }
       }
 
@@ -3546,10 +3689,36 @@
           ].filter(Boolean).join(" · ");
           fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! ${extraInfo ? `(${escapeHtml(extraInfo)}) ` : ""}– ${escapeHtml(explanation)}</div>`;
         } else {
-          fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${escapeHtml(expectedAnswer)}) – ${escapeHtml(explanation)}</div>`;
+          fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${escapeHtml(expected)}) – ${escapeHtml(explanation)}</div>`;
         }
         typesetMath(fb);
       }
+      updateExamSummaryBar();
+    }
+
+    function selectProbeMcOption(qId, optValue) {
+      if (!activeExamSession || activeExamSession.finished) return;
+      const q = activeExamSession.questions.find(item => item.id === qId);
+      if (!q) return;
+      const { isRight } = evaluateAnswerValue(q, optValue);
+      activeExamSession.answered[qId] = {
+        correct: isRight,
+        userAnswer: optValue,
+        pointsAwarded: false
+      };
+      renderView();
+    }
+
+    function saveProbeCalcInput(qId, val) {
+      if (!activeExamSession || activeExamSession.finished) return;
+      const q = activeExamSession.questions.find(item => item.id === qId);
+      if (!q) return;
+      const { isRight } = evaluateAnswerValue(q, val);
+      activeExamSession.answered[qId] = {
+        correct: isRight,
+        userAnswer: val,
+        pointsAwarded: false
+      };
       updateExamSummaryBar();
     }
 
@@ -3561,18 +3730,95 @@
       const correctCount = entries.filter(e => e.correct).length;
       const bar = document.getElementById("examLiveSummary");
       if (bar) {
-        bar.innerHTML = `Beantwortet: <strong>${answeredCount} / ${total}</strong> · Richtig: <strong>${correctCount}</strong>`;
+        if (activeExamSession.mode === "probe" && !activeExamSession.finished) {
+          bar.innerHTML = `Beantwortet: <strong>${answeredCount} / ${total}</strong> · Probeprüfung (Auswertung bei Abgabe)`;
+        } else {
+          bar.innerHTML = `Beantwortet: <strong>${answeredCount} / ${total}</strong> · Richtig: <strong>${correctCount}</strong>`;
+        }
       }
     }
 
-    function finishExamSession() {
+    function finishExamSession(byTimeout = false) {
       if (!activeExamSession) return;
+      stopExamTimerInterval();
       activeExamSession.finished = true;
+      activeExamSession.timedOut = Boolean(byTimeout);
+
+      // Alle noch nicht bewerteten Antworten (insb. Probeprüfung) jetzt auswerten
+      let bonusPoints = 0;
+      activeExamSession.questions.forEach(q => {
+        const ans = activeExamSession.answered[q.id];
+        if (!ans) {
+          const valEl = document.getElementById("exam-ans-" + q.id);
+          const rawVal = valEl ? valEl.value : "";
+          const { isRight } = evaluateAnswerValue(q, rawVal);
+          activeExamSession.answered[q.id] = {
+            correct: isRight,
+            userAnswer: rawVal,
+            pointsAwarded: false
+          };
+        }
+        const finalAns = activeExamSession.answered[q.id];
+        if (finalAns && finalAns.correct && !finalAns.pointsAwarded) {
+          masteredQuestionIds.add(q.id);
+          finalAns.pointsAwarded = true;
+          bonusPoints += 10;
+        }
+      });
+
+      if (bonusPoints > 0) {
+        saveMasteredQuestions();
+        recordLearningActivity(bonusPoints);
+        activeExamSession.pointsEarnedInSession = (activeExamSession.pointsEarnedInSession || 0) + bonusPoints;
+      }
+
+      if (!activeExamSession.historySaved && currentUser) {
+        const total = activeExamSession.questions.length;
+        const correctCount = Object.values(activeExamSession.answered).filter(a => a.correct).length;
+        const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+        const passed = pct >= (activeExamSession.passThresholdPct || 60);
+        const elapsedSec = activeExamSession.hasTimer
+          ? Math.max(1, activeExamSession.totalDurationSec - activeExamSession.remainingSec)
+          : Math.max(1, Math.round((Date.now() - (activeExamSession.startedAtMs || Date.now())) / 1000));
+
+        const now = new Date();
+        const dateLabel = now.toLocaleString("de-AT", {
+          day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+
+        examHistory.unshift({
+          id: "eh-" + Date.now(),
+          userId: Number(currentUser.id),
+          mode: activeExamSession.mode,
+          scopeLabel: activeExamSession.scopeLabel,
+          correctCount,
+          totalCount: total,
+          pct,
+          passed,
+          pointsEarned: activeExamSession.pointsEarnedInSession || 0,
+          durationStr: formatSecondsMMSS(elapsedSec),
+          timedOut: Boolean(byTimeout),
+          createdAt: dateLabel
+        });
+        examHistory = examHistory.slice(0, 30);
+        activeExamSession.historySaved = true;
+        saveExamHistory();
+      }
+
       renderView();
     }
 
     function resetExamSessionToBuilder() {
+      stopExamTimerInterval();
       activeExamSession = null;
+      renderView();
+    }
+
+    function clearExamHistoryForUser() {
+      if (!currentUser) return;
+      if (!confirm("Möchtest du deinen Prüfungsverlauf wirklich löschen?")) return;
+      examHistory = examHistory.filter(h => Number(h.userId) !== Number(currentUser.id));
+      saveExamHistory();
       renderView();
     }
 
@@ -3583,65 +3829,101 @@
         const answeredCount = entries.length;
         const correctCount = entries.filter(e => e.correct).length;
         const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+        const passed = pct >= (activeExamSession.passThresholdPct || 60);
+        const modeTitle = activeExamSession.mode === "probe"
+          ? "🧪 Probeprüfung"
+          : activeExamSession.mode === "exam"
+            ? "⏱️ Prüfungssimulation"
+            : "🎯 Freies Üben";
 
         return `
           <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
               <div>
-                <h3>🎓 Laufende Prüfung (${total} Fragen)</h3>
+                <h3>${modeTitle} (${total} Fragen)</h3>
                 <div id="examLiveSummary" style="font-size:13px; color:var(--text-muted); margin-top:4px;">
-                  Beantwortet: <strong>${answeredCount} / ${total}</strong> · Richtig: <strong>${correctCount}</strong>
+                  ${activeExamSession.mode === "probe" && !activeExamSession.finished
+                    ? `Beantwortet: <strong>${answeredCount} / ${total}</strong> · Auswertung nach Abgabe`
+                    : `Beantwortet: <strong>${answeredCount} / ${total}</strong> · Richtig: <strong>${correctCount}</strong>`
+                  }
                 </div>
               </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                ${!activeExamSession.finished ? `<button class="btn-primary" onclick="finishExamSession()">📊 Auswertung anzeigen</button>` : ""}
-                <button class="btn-secondary" onclick="resetExamSessionToBuilder()">⚙️ Prüfungs-Konfiguration</button>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                ${activeExamSession.hasTimer ? `
+                  <span id="examTimerBadge" class="exam-timer-pill ${activeExamSession.remainingSec <= 60 ? 'urgent' : ''}">
+                    ⏱️ ${formatSecondsMMSS(activeExamSession.remainingSec)}
+                  </span>
+                ` : ""}
+                ${!activeExamSession.finished ? `<button class="btn-primary" onclick="finishExamSession(false)">📊 Prüfung abgeben &amp; auswerten</button>` : ""}
+                <button class="btn-secondary" onclick="resetExamSessionToBuilder()">⚙️ Konfiguration</button>
               </div>
             </div>
 
             ${activeExamSession.finished ? `
-              <div class="result-banner ${pct >= 50 ? 'result-ok' : 'result-err'}" style="margin-bottom:16px; font-size:15px;">
-                🏁 Prüfung beendet: <strong>${correctCount} von ${total}</strong> Fragen richtig (<strong>${pct}%</strong>) · Aktueller Punktestand: <strong>${currentUser.points} Pkt</strong> · Streak: <strong>${currentUser.streak} Tage 🔥</strong>
+              <div class="result-banner ${passed ? 'result-ok' : 'result-err'}" style="margin-bottom:16px; font-size:15px;">
+                ${activeExamSession.timedOut ? "⏰ Zeit abgelaufen! " : "🏁 "}
+                <strong>${passed ? "✅ BESTANDEN" : "❌ NICHT BESTANDEN"}</strong> (${pct}% · Schwelle: ${activeExamSession.passThresholdPct}%) ·
+                <strong>${correctCount} von ${total}</strong> Fragen richtig ·
+                <strong>+${activeExamSession.pointsEarnedInSession || 0} Pkt</strong> ·
+                Streak: <strong>${currentUser.streak} Tage 🔥</strong>
+              </div>
+            ` : activeExamSession.mode === "probe" ? `
+              <div class="result-banner" style="background:var(--warning-bg); color:var(--warning-text); border:1px solid var(--warning-border); margin-bottom:14px; font-size:13px;">
+                🧪 <strong>Probeprüfungs-Modus aktiv:</strong> Wähle bzw. trage deine Antworten ein und klicke oben auf <em>„Prüfung abgeben &amp; auswerten“</em> (oder warte auf den Timer), um die Gesamtauswertung und Musterlösungen zu sehen.
               </div>
             ` : ""}
 
             ${activeExamSession.questions.map((q, idx) => {
               const prev = activeExamSession.answered[q.id];
-              const existingFb = prev
-                ? (prev.correct
-                    ? `<div class="result-banner result-ok">✅ Richtig beantwortet – ${escapeHtml(q.explanation)}</div>`
-                    : `<div class="result-banner result-err">❌ Falsch (Deine Antwort: „${escapeHtml(prev.userAnswer)}“ · Richtig: ${escapeHtml(q.correct || q.answer)}) – ${escapeHtml(q.explanation)}</div>`)
-                : "";
+              const showDetailedFeedback = activeExamSession.mode !== "probe" || activeExamSession.finished;
+
+              let existingFb = "";
+              if (prev && showDetailedFeedback) {
+                existingFb = prev.correct
+                  ? `<div class="result-banner result-ok">✅ Richtig beantwortet – ${escapeHtml(q.explanation)}</div>`
+                  : `<div class="result-banner result-err">❌ Falsch (Deine Antwort: „${escapeHtml(prev.userAnswer)}“ · Richtig: ${escapeHtml(q.correct || q.answer)}) – ${escapeHtml(q.explanation)}</div>`;
+              } else if (prev && activeExamSession.mode === "probe") {
+                existingFb = `<div class="result-banner" style="background:var(--accent-soft); color:var(--accent);">📝 Antwort erfasst: ${escapeHtml(prev.userAnswer)}</div>`;
+              }
 
               const safeQId = escapeJsSingle(q.id);
               const safeExpl = escapeJsSingle(q.explanation);
 
               if (q.type === "mc") {
-                const safeCorr = escapeJsSingle(q.correct);
                 return `
                   <div class="question-card">
                     <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${escapeHtml(q.subjectName)} • ${escapeHtml(q.folderName)}${q.isAutoGenerated ? " • Auto-Frage" : ""}</span>
                     <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
                     <div style="margin-top:8px;">
-                      ${q.options.map(opt => `
-                        <div class="mc-option" onclick="submitExamQuestionAnswer('${safeQId}', '${escapeJsSingle(opt)}', '${safeCorr}', '${safeExpl}', true)">
-                          <span>🔘</span> <span>${escapeHtml(opt)}</span>
-                        </div>
-                      `).join("")}
+                      ${q.options.map(opt => {
+                        const isChosen = prev && prev.userAnswer === opt;
+                        const clickHandler = (activeExamSession.mode === "probe" && !activeExamSession.finished)
+                          ? `selectProbeMcOption('${safeQId}', '${escapeJsSingle(opt)}')`
+                          : `submitExamQuestionAnswer('${safeQId}', '${escapeJsSingle(opt)}', '${safeExpl}', true)`;
+                        return `
+                          <div class="mc-option ${isChosen ? 'selected-choice' : ''}" onclick="${clickHandler}">
+                            <span>${isChosen ? '🔵' : '🔘'}</span> <span>${escapeHtml(opt)}</span>
+                          </div>
+                        `;
+                      }).join("")}
                     </div>
                     <div id="exam-fb-${escapeHtml(q.id)}">${existingFb}</div>
                   </div>
                 `;
               } else {
-                const safeAns = escapeJsSingle(q.answer);
                 const inputId = `exam-ans-${escapeHtml(q.id)}`;
+                const onInp = (activeExamSession.mode === "probe" && !activeExamSession.finished)
+                  ? `oninput="saveProbeCalcInput('${safeQId}', this.value)"`
+                  : "";
                 return `
                   <div class="question-card">
                     <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${escapeHtml(q.subjectName)} • ${escapeHtml(q.folderName)}${q.isAutoGenerated ? " • Auto-Frage" : ""}</span>
                     <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
                     <div style="display:flex; gap:8px; margin-top:10px;">
-                      <input type="text" id="${inputId}" class="input-field" style="margin:0;" value="${prev ? escapeHtml(prev.userAnswer) : ''}" placeholder="Antwort eingeben...">
-                      <button class="btn-primary" onclick="submitExamQuestionAnswer('${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeAns}', '${safeExpl}', false)">Prüfen</button>
+                      <input type="text" id="${inputId}" class="input-field" style="margin:0;" value="${prev ? escapeHtml(prev.userAnswer) : ''}" placeholder="Antwort eingeben..." ${onInp}>
+                      ${!activeExamSession.finished && activeExamSession.mode !== "probe" ? `
+                        <button class="btn-primary" onclick="submitExamQuestionAnswer('${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeExpl}', false)">Prüfen</button>
+                      ` : ""}
                     </div>
                     <div id="exam-fb-${escapeHtml(q.id)}">${existingFb}</div>
                   </div>
@@ -3676,6 +3958,7 @@
 
       const filteredPool = collectExamQuestionPool(visibleSubjects, true);
       const plannedCount = getTargetExamCount(filteredPool.length);
+      const myHistory = examHistory.filter(h => Number(h.userId) === Number(currentUser.id));
 
       return `
         <div class="card">
@@ -3704,10 +3987,39 @@
             </div>
           </div>
 
-          <h3 style="font-size:19px; margin-bottom:2px;">⚙️ Prüfungs-Konfiguration</h3>
+          <h3 style="font-size:19px; margin-bottom:2px;">⚙️ Prüfungs- &amp; Probeprüfungs-Konfiguration</h3>
           <p style="font-size:13px; color:var(--text-muted);">
-            Generiert automatisch Fragen aus deinen ausgewählten Unterordnern und Fächern.
+            Starte eine Probeprüfung unter Zeitdruck, eine Prüfungssimulation oder ein freies Üben aus deinen Ordnern.
           </p>
+
+          <div class="exam-section-title">0. Prüfungsmodus wählen</div>
+          <div class="exam-option-grid">
+            <button type="button" class="exam-option-card ${examSimulationMode === 'probe' ? 'active' : ''}" onclick="examSimulationMode='probe'; renderView();">
+              <div class="exam-option-title">🧪 Probeprüfung (Mit Timer &amp; Endauswertung)</div>
+              <div class="exam-option-desc">Realistische Simulation mit Countdown – Auswertung &amp; Musterlösungen bei Abgabe.</div>
+            </button>
+            <button type="button" class="exam-option-card ${examSimulationMode === 'exam' ? 'active' : ''}" onclick="examSimulationMode='exam'; renderView();">
+              <div class="exam-option-title">⏱️ Prüfungssimulation (Sofort-Feedback + Timer)</div>
+              <div class="exam-option-desc">Prüfung mit Zeitlimit und direkter Rückmeldung nach jeder Frage.</div>
+            </button>
+            <button type="button" class="exam-option-card ${examSimulationMode === 'practice' ? 'active' : ''}" onclick="examSimulationMode='practice'; renderView();">
+              <div class="exam-option-title">🎯 Freies Üben (Ohne Zeitlimit)</div>
+              <div class="exam-option-desc">Entspanntes Lernen ohne Countdown mit sofortiger Erklärung.</div>
+            </button>
+          </div>
+
+          ${(examSimulationMode === 'probe' || examSimulationMode === 'exam') ? `
+            <div class="form-grid-2" style="margin-top:12px;">
+              <div>
+                <label style="font-size:12.5px; font-weight:700;">Zeitlimit (in Minuten)</label>
+                <input type="number" id="examDurationMinutesInput" class="input-field" style="margin-bottom:0;" min="1" max="180" value="${examDurationMinutes}" onchange="examDurationMinutes = Math.max(1, parseInt(this.value, 10) || 15);">
+              </div>
+              <div>
+                <label style="font-size:12.5px; font-weight:700;">Bestehensgrenze (in %)</label>
+                <input type="number" id="examPassThresholdInput" class="input-field" style="margin-bottom:0;" min="1" max="100" value="${examPassThresholdPct}" onchange="examPassThresholdPct = Math.min(100, Math.max(1, parseInt(this.value, 10) || 60));">
+              </div>
+            </div>
+          ` : ""}
 
           <div class="exam-section-title">1. Frageart auswählen</div>
           <div class="exam-option-grid">
@@ -3771,9 +4083,40 @@
               Verfügbar im Pool: <strong>${filteredPool.length} Fragen</strong> · Wird generiert: <strong>${plannedCount} Fragen</strong>
             </span>
             <button type="button" class="btn-primary" style="padding:12px 20px;" onclick="startConfiguredExam()">
-              🚀 Prüfung jetzt generieren &amp; starten (${plannedCount})
+              🚀 ${examSimulationMode === 'probe' ? 'Probeprüfung starten' : 'Prüfung starten'} (${plannedCount})
             </button>
           </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <div>
+              <h3>📜 Dein Prüfungs- &amp; Probeprüfungsverlauf (${myHistory.length})</h3>
+              <p style="font-size:12.5px; color:var(--text-muted);">Gespeicherte Ergebnisse deiner absolvierten Durchgänge.</p>
+            </div>
+            ${myHistory.length > 0 ? `<button type="button" class="btn-danger" onclick="clearExamHistoryForUser()">Verlauf löschen</button>` : ""}
+          </div>
+
+          ${myHistory.length === 0
+            ? `<p style="font-size:13.5px; color:var(--text-muted);">Noch keine abgeschlossenen Prüfungen oder Probeprüfungen vorhanden.</p>`
+            : myHistory.map(h => {
+                const mLabel = h.mode === "probe" ? "🧪 Probeprüfung" : h.mode === "exam" ? "⏱️ Prüfung" : "🎯 Übung";
+                return `
+                  <div class="history-row">
+                    <div>
+                      <span class="count-pill">${escapeHtml(mLabel)}</span>
+                      <span class="${h.passed ? 'mastered-badge' : 'days-badge'}" style="margin-left:6px;">
+                        ${h.passed ? `✅ Bestanden (${h.pct}%)` : `❌ Nicht bestanden (${h.pct}%)`}
+                      </span>
+                      <div style="font-weight:700; font-size:14px; margin-top:4px;">
+                        ${h.correctCount} / ${h.totalCount} richtig · +${h.pointsEarned} Pkt · Dauer: ${escapeHtml(h.durationStr)}
+                      </div>
+                      <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(h.createdAt)}${h.timedOut ? " · Zeit abgelaufen" : ""}</div>
+                    </div>
+                  </div>
+                `;
+              }).join("")
+          }
         </div>
       `;
     }
@@ -3861,6 +4204,7 @@
       activeFolderId = null;
       activeChatPartnerId = null;
       activeExamSession = null;
+      stopExamTimerInterval();
       friendSearchQuery = "";
       folderSearchQuery = "";
       setLogoutBannerMessage("");
@@ -4225,6 +4569,7 @@
     function navigate(viewId, btnEl) {
       if (!isAuthenticated) return;
       if (currentView === "calendar") snapshotCalendarDraft();
+      stopExamTimerInterval();
       currentView = viewId;
       activeFolderId = null;
       activeExamSession = null;
@@ -4365,303 +4710,17 @@
       `;
     }
 
-    let currentDerivativeTask = null;
-
-    function generateDerivativeTask() {
-      const selectedLevel = document.getElementById("derivLevel")?.value || "poly";
-      const levels = ["poly", "chain", "exp"];
-      const level = selectedLevel === "all" ? levels[Math.floor(Math.random() * levels.length)] : selectedLevel;
-      let fnLatex = "", answerPlain = "", answerLatex = "", hintLatex = "", badgeText = "";
-      const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-      if (level === "poly") {
-        const a = rand(2, 6), n = rand(2, 5), b = rand(2, 9);
-        fnLatex = `f(x) = ${a}x^{${n}} + ${b}x`;
-        answerPlain = `${a * n}x^${n - 1} + ${b}`;
-        answerLatex = `f'(x) = ${a * n}x^{${n - 1}} + ${b}`;
-        hintLatex = `Potenzregel: $(${a} \\cdot ${n})x^{${n}-1} + ${b}$`;
-        badgeText = "Polynom / Potenzregel";
-      } else if (level === "chain") {
-        const a = rand(2, 5), k = rand(2, 4);
-        fnLatex = `f(x) = ${a} \\cdot \\sin(${k}x)`;
-        answerPlain = `${a * k}cos(${k}x)`;
-        answerLatex = `f'(x) = ${a * k}\\cos(${k}x)`;
-        hintLatex = `Kettenregel: Innere Ableitung ($${k}$) $\\cdot$ äußere Ableitung ($${a}\\cos(${k}x)$)`;
-        badgeText = "Sinus & Kettenregel";
-      } else {
-        const a = rand(2, 6), k = rand(2, 5);
-        fnLatex = `f(x) = ${a} \\cdot e^{${k}x}`;
-        answerPlain = `${a * k}e^(${k}x)`;
-        answerLatex = `f'(x) = ${a * k}e^{${k}x}`;
-        hintLatex = `Exponential- & Kettenregel: $${a} \\cdot ${k} \\cdot e^{${k}x}$`;
-        badgeText = "e-Funktion & Kettenregel";
-      }
-
-      currentDerivativeTask = { fnLatex, answerPlain, answerLatex, hintLatex };
-      const box = document.getElementById("derivTaskDisplay");
-      if (box) {
-        box.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-            <span style="font-size:13px; color:var(--text-muted);">Bilde die 1. Ableitung $f'(x)$ für:</span>
-            ${selectedLevel === "all" ? `<span class="count-pill">🎲 Mix: ${escapeHtml(badgeText)}</span>` : ""}
-          </div>
-          <div class="formula-box">$$${fnLatex}$$</div>
-          <label style="font-size:13px; font-weight:600;">Deine Lösung für $f'(x)$ (z. B. 12x^2 + 4):</label>
-          <input type="text" id="derivUserAnswer" class="input-field" placeholder="f'(x) eingeben...">
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="btn-primary" onclick="checkDerivativeAnswer()">✅ Prüfen</button>
-            <button class="btn-secondary" onclick="showDerivativeSolution()">💡 Lösung anzeigen</button>
-            <button class="btn-secondary" onclick="generateDerivativeTask()">🔄 Neue Aufgabe</button>
-          </div>
-          <div id="derivFeedback"></div>
-        `;
-        typesetMath(box);
-      }
-    }
-
-    function normalizeMath(str) {
-      return str.toLowerCase().replace(/\s+/g, "").replace(/\*/g, "").replace(/[{}]/g, "").replace(/\^1(?!\d)/g, "");
-    }
-
-    function checkDerivativeAnswer() {
-      const userVal = normalizeMath(document.getElementById("derivUserAnswer").value);
-      const correctVal = normalizeMath(currentDerivativeTask.answerPlain);
-      const fb = document.getElementById("derivFeedback");
-      if (!userVal) return;
-
-      if (userVal === correctVal) {
-        const res = recordLearningActivity(15);
-        const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
-        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben${escapeHtml(streakMsg)}. (${currentDerivativeTask.hintLatex})</div>`;
-      } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Noch nicht ganz. Tipp: ${currentDerivativeTask.hintLatex}</div>`;
-      }
-      typesetMath(fb);
-    }
-
-    function showDerivativeSolution() {
-      const fb = document.getElementById("derivFeedback");
-      fb.innerHTML = `<div class="result-banner" style="background:var(--accent-soft); color:var(--accent);">Musterlösung: $$${currentDerivativeTask.answerLatex}$$<div style="font-size:12.5px; font-weight:500; margin-top:4px;">${currentDerivativeTask.hintLatex}</div></div>`;
-      typesetMath(fb);
-    }
-
+    let currentUser = users[0];
+    let currentView = "home";
+    let activeFolderId = null;
     let activeCalcTab = "cutting";
-    let activeFormulaCategoryFilter = "ALL";
-
-    function renderFormulaCardItem(cf) {
-      const safeId = escapeJsSingle(cf.id);
-      const domId = escapeHtml(cf.id);
-      return `
-        <div class="question-card">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="count-pill">${escapeHtml(cf.category)}</span>
-            ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${safeId}')">Löschen</button>` : ""}
-          </div>
-          <h3 style="margin-top:8px;">${escapeHtml(cf.title)}</h3>
-          <div class="formula-box">$$${cf.formula}$$</div>
-          ${cf.description ? `<h4 style="margin-bottom:4px;">Erklärung</h4><p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(cf.description)}</p>` : ""}
-          ${Array.isArray(cf.variables) && cf.variables.length > 0 ? `
-            <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
-            <table class="var-table" style="margin-bottom:16px;">
-              <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
-              <tbody>
-                ${cf.variables.map(v => `
-                  <tr>
-                    <td class="var-sym">$${v.symbol}$</td>
-                    <td>${escapeHtml(v.meaning)}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          ` : ""}
-          <div class="form-grid-2">
-            <div><label style="font-size:12px; font-weight:600;">${escapeHtml(cf.var1Label)}</label><input type="number" id="cfv1-${domId}" class="input-field" value="${Number(cf.var1Default) || 0}"></div>
-            <div><label style="font-size:12px; font-weight:600;">${escapeHtml(cf.var2Label)}</label><input type="number" id="cfv2-${domId}" class="input-field" value="${Number(cf.var2Default) || 0}"></div>
-          </div>
-          <button class="btn-primary" onclick="runCustomFormulaCalc('${safeId}')">Berechnen</button>
-          <div id="cfres-${domId}"></div>
-        </div>
-      `;
-    }
-
-    function renderCustomFormulasTabContent() {
-      const categories = ["ALL", ...Array.from(new Set(customFormulas.map(f => f.category || "Allgemein")))];
-      const filtered = activeFormulaCategoryFilter === "ALL"
-        ? customFormulas
-        : customFormulas.filter(f => (f.category || "Allgemein") === activeFormulaCategoryFilter);
-
-      return `
-        <div class="filter-strip">
-          ${categories.map(cat => `
-            <button type="button"
-                    class="filter-btn ${activeFormulaCategoryFilter === cat ? 'active' : ''}"
-                    onclick="activeFormulaCategoryFilter='${escapeJsSingle(cat)}'; renderView();">
-              ${cat === "ALL" ? `Alle (${customFormulas.length})` : `${escapeHtml(cat)} (${customFormulas.filter(x => (x.category || "Allgemein") === cat).length})`}
-            </button>
-          `).join("")}
-        </div>
-        ${filtered.length === 0
-          ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Keine Formeln in dieser Kategorie vorhanden. Nutze unten das Feld, um erstellten Formel-Code einzufügen.</p>`
-          : filtered.map(cf => renderFormulaCardItem(cf)).join("")
-        }
-      `;
-    }
-
-    function renderFormulaFolderView(folder) {
-      const matching = customFormulas.filter(f =>
-        (f.category || "").toLowerCase() === folder.name.toLowerCase()
-      );
-      return `
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-          <div>
-            <span class="count-pill">📁 Formel-Ordner</span>
-            <h3 style="margin-top:6px;">${escapeHtml(folder.name)}</h3>
-          </div>
-          ${isAdmin() ? `
-            <button type="button" class="btn-danger" onclick="deleteFormulaFolder('${escapeJsSingle(folder.id)}')">🗑️ Ordner löschen</button>
-          ` : ""}
-        </div>
-        ${matching.length === 0
-          ? `<p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">Noch keine Formeln im Ordner „${escapeHtml(folder.name)}“. Füge unten eine Formel mit <code>"category": "${escapeHtml(folder.name)}"</code> ein oder nutze den Standardrechner.</p>`
-          : matching.map(cf => renderFormulaCardItem(cf)).join("")
-        }
-      `;
-    }
-
-    function renderCalculatorContent() {
-      if (activeCalcTab && activeCalcTab.startsWith("folder:")) {
-        const folderId = activeCalcTab.replace("folder:", "");
-        const folder = customFormulaFolders.find(f => f.id === folderId);
-        if (folder) return renderFormulaFolderView(folder);
-      }
-
-      if (activeCalcTab === "cutting") {
-        return `
-          <span class="count-pill">Zerspanung</span>
-          <h3 style="margin-top:8px;">Schnittgeschwindigkeit &amp; Drehzahl</h3>
-          <div class="formula-box">$$n = \\frac{v_c \\cdot 1000}{d \\cdot \\pi}$$</div>
-          <h4 style="margin-bottom:4px;">Erklärung</h4>
-          <p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">
-            Mit dieser Formel berechnest du die passende Spindeldrehzahl $n$ beim Drehen, Fräsen oder Bohren aus Schnittgeschwindigkeit $v_c$ und Werkstück- bzw. Werkzeugdurchmesser $d$.
-          </p>
-          <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
-          <table class="var-table" style="margin-bottom:16px;">
-            <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
-            <tbody>
-              <tr><td class="var-sym">$n$</td><td>Drehzahl in $\\text{min}^{-1}$ ($1/\\text{min}$)</td></tr>
-              <tr><td class="var-sym">$v_c$</td><td>Schnittgeschwindigkeit in $\\text{m/min}$</td></tr>
-              <tr><td class="var-sym">$d$</td><td>Durchmesser in $\\text{mm}$ ($d > 0$)</td></tr>
-            </tbody>
-          </table>
-          <div class="form-grid-2">
-            <div><label style="font-size:13px; font-weight:600;">Schnittgeschwindigkeit $v_c$ [m/min]</label><input type="number" id="calcVc" class="input-field" value="180"></div>
-            <div><label style="font-size:13px; font-weight:600;">Durchmesser $d$ [mm]</label><input type="number" id="calcD" class="input-field" value="40"></div>
-          </div>
-          <button class="btn-primary" onclick="calcCuttingSpeed()">Drehzahl $n$ berechnen</button>
-          <div id="calcResultBox"></div>
-        `;
-      } else if (activeCalcTab === "ohm") {
-        return `
-          <span class="count-pill">Elektrotechnik</span>
-          <h3 style="margin-top:8px;">Ohmsches Gesetz &amp; Leistung</h3>
-          <div class="formula-box">$$I = \\frac{U}{R}, \\qquad P = U \\cdot I$$</div>
-          <h4 style="margin-bottom:4px;">Erklärung</h4>
-          <p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">
-            Bei linearen ohmschen Verbrauchern ist die elektrische Stromstärke $I$ proportional zur Spannung $U$ und umgekehrt proportional zum Widerstand $R$.
-          </p>
-          <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
-          <table class="var-table" style="margin-bottom:16px;">
-            <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
-            <tbody>
-              <tr><td class="var-sym">$U$</td><td>Elektrische Spannung in Volt ($\\text{V}$)</td></tr>
-              <tr><td class="var-sym">$R$</td><td>Elektrischer Widerstand in Ohm ($\\Omega$, $R > 0$)</td></tr>
-              <tr><td class="var-sym">$I, P$</td><td>Stromstärke in Ampere ($\\text{A}$) und Wirkleistung in Watt ($\\text{W}$)</td></tr>
-            </tbody>
-          </table>
-          <div class="form-grid-2">
-            <div><label style="font-size:13px; font-weight:600;">Spannung $U$ [V]</label><input type="number" id="calcU" class="input-field" value="230"></div>
-            <div><label style="font-size:13px; font-weight:600;">Widerstand $R$ [$\\Omega$]</label><input type="number" id="calcR" class="input-field" value="46"></div>
-          </div>
-          <button class="btn-primary" onclick="calcOhm()">Strom &amp; Leistung berechnen</button>
-          <div id="calcResultBox"></div>
-        `;
-      } else {
-        return `
-          <span class="count-pill">Algebra</span>
-          <h3 style="margin-top:8px;">Mitternachtsformel (abc-Formel)</h3>
-          <div class="formula-box">$$x_{1,2} = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$</div>
-          <h4 style="margin-bottom:4px;">Erklärung</h4>
-          <p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">
-            Mit der abc-Formel löst du allgemeine quadratische Gleichungen der Form $ax^2 + bx + c = 0$. Der Term unter der Wurzel ($D = b^2 - 4ac$) heißt Diskriminante und gibt an, wie viele reelle Lösungen existieren.
-          </p>
-          <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
-          <table class="var-table" style="margin-bottom:16px;">
-            <thead><tr><th>Symbol</th><th>Bedeutung</th></tr></thead>
-            <tbody>
-              <tr><td class="var-sym">$a$</td><td>Koeffizient vor $x^2$ ($a \\neq 0$)</td></tr>
-              <tr><td class="var-sym">$b$</td><td>Koeffizient vor $x$</td></tr>
-              <tr><td class="var-sym">$c$</td><td>Absolutes Glied (Konstante)</td></tr>
-            </tbody>
-          </table>
-          <div class="form-grid-2" style="grid-template-columns: repeat(3, 1fr);">
-            <div><label style="font-size:13px; font-weight:600;">$a$</label><input type="number" id="calcA" class="input-field" value="1"></div>
-            <div><label style="font-size:13px; font-weight:600;">$b$</label><input type="number" id="calcB" class="input-field" value="-5"></div>
-            <div><label style="font-size:13px; font-weight:600;">$c$</label><input type="number" id="calcC" class="input-field" value="6"></div>
-          </div>
-          <button class="btn-primary" onclick="calcQuadratic()">Lösungen $x_1, x_2$ berechnen</button>
-          <div id="calcResultBox"></div>
-        `;
-      }
-    }
-
-    function calcCuttingSpeed() {
-      const vc = parseFloat(document.getElementById("calcVc").value);
-      const d = parseFloat(document.getElementById("calcD").value);
-      if (!vc || !d || d <= 0) return;
-      const box = document.getElementById("calcResultBox");
-      box.innerHTML = `<div class="result-banner result-ok">$$n = ${((vc * 1000) / (d * Math.PI)).toFixed(1)}\\text{ min}^{-1}$$</div>`;
-      typesetMath(box);
-    }
-    function calcOhm() {
-      const u = parseFloat(document.getElementById("calcU").value);
-      const r = parseFloat(document.getElementById("calcR").value);
-      if (!r || r <= 0) return;
-      const i = u / r;
-      const box = document.getElementById("calcResultBox");
-      box.innerHTML = `<div class="result-banner result-ok">$$I = ${i.toFixed(2)}\\text{ A}, \\qquad P = ${(u * i).toFixed(1)}\\text{ W}$$</div>`;
-      typesetMath(box);
-    }
-    function calcQuadratic() {
-      const a = parseFloat(document.getElementById("calcA").value);
-      const b = parseFloat(document.getElementById("calcB").value);
-      const c = parseFloat(document.getElementById("calcC").value);
-      if (!a) return;
-      const disc = b * b - 4 * a * c;
-      const box = document.getElementById("calcResultBox");
-      if (disc < 0) {
-        box.innerHTML = `<div class="result-banner result-err">Keine reelle Lösung (Diskriminante $D = ${disc.toFixed(2)} < 0$).</div>`;
-      } else {
-        const x1 = (-b + Math.sqrt(disc)) / (2 * a);
-        const x2 = (-b - Math.sqrt(disc)) / (2 * a);
-        box.innerHTML = `<div class="result-banner result-ok">$$x_1 = ${x1.toFixed(2)}, \\qquad x_2 = ${x2.toFixed(2)}$$</div>`;
-      }
-      typesetMath(box);
-    }
-
-    function runCustomFormulaCalc(id) {
-      const cf = customFormulas.find(f => f.id === id);
-      if (!cf) return;
-      const v1 = parseFloat(document.getElementById("cfv1-" + id).value) || 0;
-      const v2 = parseFloat(document.getElementById("cfv2-" + id).value) || 0;
-      const outEl = document.getElementById("cfres-" + id);
-      try {
-        const fn = new Function("v1", "v2", "pi", "sqrt", "pow", "abs", `"use strict"; return (${cf.calcExpr});`);
-        const res = fn(v1, v2, Math.PI, Math.sqrt, Math.pow, Math.abs);
-        outEl.innerHTML = `<div class="result-banner result-ok">Ergebnis: ${typeof res === "number" ? res.toFixed(3) : escapeHtml(res)}</div>`;
-      } catch (e) {
-        outEl.innerHTML = `<div class="result-banner result-err">Formel-Ausdruck konnte nicht berechnet werden.</div>`;
-      }
-    }
+    let activeMaturaLang = "deutsch";
+    let openMaturaIndexByLang = { deutsch: -1, englisch: -1 };
+    let isLoginScreenVisible = true;
+    let activeDerivCategory = "all";
+    let currentDerivExercise = null;
+    let derivFeedback = null;
+    let derivStreak = 0;
 
     let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
     function saveCustomFormulas() {
@@ -4669,267 +4728,414 @@
       queueCloudSync();
     }
 
-    function importCustomFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen neue Formeln hinzufügen.");
-      const raw = document.getElementById("formulaCodeInput").value.trim();
-      const fb = document.getElementById("formulaImportFeedback");
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (!parsed.title || !parsed.formula || !parsed.calcExpr) throw new Error("Pflichtfelder fehlen.");
-        customFormulas.push({
-          id: "cf-" + Date.now(),
-          title: parsed.title,
-          category: parsed.category || "Eigene Formel",
-          formula: parsed.formula,
-          description: parsed.description || "",
-          variables: Array.isArray(parsed.variables) ? parsed.variables : [],
-          var1Label: parsed.var1Label || "Wert A",
-          var1Default: parsed.var1Default ?? 10,
-          var2Label: parsed.var2Label || "Wert B",
-          var2Default: parsed.var2Default ?? 2,
-          calcExpr: parsed.calcExpr
-        });
-        saveCustomFormulas();
-        renderSidebar();
-        renderView();
-        document.getElementById("formulaImportFeedback").innerHTML = `<div class="result-banner result-ok">✅ Formel „${escapeHtml(parsed.title)}“ wurde erfolgreich hinzugefügt!</div>`;
-      } catch (err) {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Ungültiges Format: ${escapeHtml(err.message)}</div>`;
+    const formulaCatalog = {
+      cutting: {
+        title: "Schnittgeschwindigkeit & Drehzahl (Zerspanung)",
+        latex: "$$v_c = \\frac{\\pi \\cdot d \\cdot n}{1000} \\quad \\Longleftrightarrow \\quad n = \\frac{v_c \\cdot 1000}{\\pi \\cdot d}$$",
+        vars: [
+          { sym: "$v_c$", desc: "Schnittgeschwindigkeit in $\\text{m/min}$" },
+          { sym: "$d$", desc: "Werkzeug- bzw. Werkstückdurchmesser in $\\text{mm}$" },
+          { sym: "$n$", desc: "Spindeldrehzahl in $\\text{min}^{-1}$ (U/min)" }
+        ],
+        inputs: [
+          { id: "vc_d", label: "Durchmesser d (mm)", val: 50 },
+          { id: "vc_n", label: "Drehzahl n (1/min)", val: 1000 }
+        ],
+        calc: (v) => {
+          const vc = (Math.PI * v.vc_d * v.vc_n) / 1000;
+          return `Schnittgeschwindigkeit \\(v_c = ${vc.toFixed(2)}\\text{ m/min}\\)`;
+        }
+      },
+      ohm: {
+        title: "Ohmsches Gesetz & Elektrische Leistung",
+        latex: "$$U = R \\cdot I \\qquad P = U \\cdot I = R \\cdot I^2 = \\frac{U^2}{R}$$",
+        vars: [
+          { sym: "$U$", desc: "Elektrische Spannung in Volt ($\\text{V}$)" },
+          { sym: "$I$", desc: "Elektrische Stromstärke in Ampere ($\\text{A}$)" },
+          { sym: "$R$", desc: "Elektrischer Widerstand in Ohm ($\\Omega$)" },
+          { sym: "$P$", desc: "Elektrische Leistung in Watt ($\\text{W}$)" }
+        ],
+        inputs: [
+          { id: "ohm_u", label: "Spannung U (V)", val: 230 },
+          { id: "ohm_r", label: "Widerstand R (Ω)", val: 20 }
+        ],
+        calc: (v) => {
+          const i = v.ohm_u / v.ohm_r;
+          const p = v.ohm_u * i;
+          return `Stromstärke \\(I = ${i.toFixed(2)}\\text{ A}\\) · Leistung \\(P = ${p.toFixed(2)}\\text{ W}\\)`;
+        }
+      },
+      quad: {
+        title: "Mitternachtsformel (Quadratische Gleichungen)",
+        latex: "$$ax^2 + bx + c = 0 \\implies x_{1,2} = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$",
+        vars: [
+          { sym: "$a, b, c$", desc: "Koeffizienten der quadratischen Gleichung ($a \\neq 0$)" },
+          { sym: "$D = b^2 - 4ac$", desc: "Diskriminante (bestimmt Anzahl der reellen Lösungen)" },
+          { sym: "$x_{1,2}$", desc: "Lösungen / Nullstellen der quadratischen Funktion" }
+        ],
+        inputs: [
+          { id: "q_a", label: "a", val: 1 },
+          { id: "q_b", label: "b", val: -5 },
+          { id: "q_c", label: "c", val: 6 }
+        ],
+        calc: (v) => {
+          const disc = v.q_b * v.q_b - 4 * v.q_a * v.q_c;
+          if (disc < 0) return `Keine reellen Lösungen (Diskriminante \\(D = ${disc} < 0\\))`;
+          const x1 = (-v.q_b + Math.sqrt(disc)) / (2 * v.q_a);
+          const x2 = (-v.q_b - Math.sqrt(disc)) / (2 * v.q_a);
+          return `\\(x_1 = ${x1.toFixed(2)}\\), \\(x_2 = ${x2.toFixed(2)}\\) (\\(D = ${disc.toFixed(2)}\\))`;
+        }
       }
-    }
+    };
 
-    function deleteCustomFormula(id) {
-      if (!isAdmin()) return;
-      customFormulas = customFormulas.filter(f => f.id !== id);
-      saveCustomFormulas();
-      renderSidebar();
-      renderView();
-    }
+    function addCustomFormula() {
+      if (!isAdmin()) return alert("Nur Admins dürfen eigene Formeln hinzufügen.");
+      const title = document.getElementById("newFormulaTitle").value.trim();
+      const latexInput = document.getElementById("newFormulaLatex").value.trim();
+      const var1Sym = document.getElementById("newVar1Sym").value.trim();
+      const var1Desc = document.getElementById("newVar1Desc").value.trim();
+      const var2Sym = document.getElementById("newVar2Sym").value.trim();
+      const var2Desc = document.getElementById("newVar2Desc").value.trim();
+      const folderId = document.getElementById("newFormulaFolderSelect")?.value || "";
 
-    let currentView = "home";
-    let activeFolderId = null;
-    let activeMaturaLang = "deutsch";
-    let openMaturaIndexByLang = { deutsch: -1, englisch: -1 };
-    let currentUser = null;
-    let isLoginScreenVisible = true;
-
-    function toggleFavoriteSubject(subId, event) {
-      if (event) event.stopPropagation();
-      const sub = subjects.find(s => s.id === subId);
-      if (!sub) return;
-      sub.favorite = !sub.favorite;
-      saveSubjects();
-      renderSidebar();
-      if (currentView === "home") renderView();
-    }
-
-    function openFavoriteSubject(subId) {
-      const target = subjects.find(s => s.id === subId);
-      if (!target) return;
-      if (!isAdmin() && !target.accessAll && !(Array.isArray(target.allowedUsers) && target.allowedUsers.includes(currentUser.id))) {
-        alert("Für dieses Fach hast du aktuell keine Freigabe.");
+      if (!title || !latexInput) {
+        alert("Bitte Titel und Formel (LaTeX) ausfüllen!");
         return;
       }
-      currentView = "subject-" + subId;
-      activeFolderId = null;
+
+      const wrappedLatex = latexInput.startsWith("$$") ? latexInput : `$$${latexInput}$$`;
+      const vars = [];
+      if (var1Sym || var1Desc) vars.push({ sym: var1Sym || "$x$", desc: var1Desc || "Variable 1" });
+      if (var2Sym || var2Desc) vars.push({ sym: var2Sym || "$y$", desc: var2Desc || "Variable 2" });
+
+      const newKey = "custom_" + Date.now();
+      const newFormula = {
+        key: newKey,
+        folderId,
+        title,
+        latex: wrappedLatex,
+        vars
+      };
+
+      customFormulas.push(newFormula);
+      saveCustomFormulas();
+      activeCalcTab = newKey;
       renderSidebar();
       renderView();
     }
 
-    function renderView() {
-      if (!isAuthenticated || isLoginScreenVisible || !currentUser) return;
-      const container = document.getElementById("viewContainer");
-      const heading = document.getElementById("pageHeading");
-      const visible = getVisibleSubjects();
+    function deleteCustomFormula(key) {
+      if (!isAdmin()) return alert("Nur Admins dürfen eigene Formeln löschen.");
+      customFormulas = customFormulas.filter(f => f.key !== key);
+      saveCustomFormulas();
+      if (activeCalcTab === key) activeCalcTab = "cutting";
+      renderSidebar();
+      renderView();
+    }
 
-      syncBackHomeButtons();
+    function renderFormulasView() {
+      let current;
+      let isCustom = false;
+      let activeCustomFormula = null;
 
-      if (currentView === "home") {
-        heading.innerText = "🏠 Startseite";
-        const myExams = getUserExams(currentUser.id);
-        const upcoming = myExams.filter(e => getDaysUntil(e.date) >= 0);
-        const favorites = visible.filter(s => s.favorite);
-        const libCount = getUserLibraryKeys(currentUser.id).length;
+      if (formulaCatalog[activeCalcTab]) {
+        current = formulaCatalog[activeCalcTab];
+      } else {
+        activeCustomFormula = customFormulas.find(f => f.key === activeCalcTab);
+        if (activeCustomFormula) {
+          isCustom = true;
+          current = activeCustomFormula;
+        } else {
+          activeCalcTab = "cutting";
+          current = formulaCatalog.cutting;
+        }
+      }
 
-        const examWarningHtml = upcoming.length > 0 ? `
-          <div class="exam-warning-card">
-            <div class="exam-warning-top">
-              <div>
-                <div style="font-weight:800; font-size:15px;">⚠️ Anstehende Prüfungen (${upcoming.length})</div>
-                <div style="margin-top:2px;">Dein persönlicher Prüfungskalender – rechtzeitig wiederholen!</div>
-              </div>
-              <button class="btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="navigate('calendar')">📅 Kalender öffnen</button>
+      const selectedFolderObj = activeCalcTab.startsWith("folder:")
+        ? customFormulaFolders.find(f => "folder:" + f.id === activeCalcTab)
+        : null;
+
+      const formulasInSelectedFolder = selectedFolderObj
+        ? customFormulas.filter(cf => cf.folderId === selectedFolderObj.id)
+        : [];
+
+      const activeCustomFolderId = selectedFolderObj
+        ? selectedFolderObj.id
+        : (activeCustomFormula?.folderId || (customFormulaFolders[0]?.id || ""));
+
+      return `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <div>
+              <h3 style="font-size:19px;">📐 Formelsammlung &amp; Rechner</h3>
+              <p style="font-size:13px; color:var(--text-muted);">
+                Integrierte Standardformeln, eigene Unterordner (z. B. Mechanik) und benutzerdefinierte Formeln.
+              </p>
             </div>
-            ${upcoming.map(ex => `
-              <div class="exam-item-box">
-                <div>
-                  <span class="count-pill">${escapeHtml(ex.subject)}</span>
-                  <div style="font-weight:700; font-size:15px; margin-top:4px;">${escapeHtml(ex.title)}</div>
-                  <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(ex.date)}${ex.notes ? " • " + escapeHtml(ex.notes) : ""}</div>
-                </div>
-                <span class="days-badge">${escapeHtml(formatDaysBadge(getDaysUntil(ex.date)))}</span>
-              </div>
-            `).join("")}
-          </div>
-        ` : "";
-
-        container.innerHTML = `
-          ${examWarningHtml}
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-              <div>
-                <h3 style="font-size:20px; margin-bottom:4px;">Willkommen zurück, ${escapeHtml(currentUser.name)}!</h3>
-                <p style="color:var(--text-muted); font-size:14px;">
-                  Punktestand: <strong>${currentUser.points} Pkt</strong> · Streak: <strong>${currentUser.streak || 0} Tage 🔥</strong> · Bibliothek: <strong>${libCount} Ordner</strong>
-                </p>
-              </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn-primary" onclick="navigate('library')">📚 Meine Bibliothek</button>
-                <button class="btn-secondary" onclick="navigate('folder-search')">🔎 Ordner suchen</button>
-                <button class="btn-secondary" onclick="navigate('custom-exam')">🎓 Eigene Prüfung</button>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-              <div>
-                <h3>⭐ Deine Favoriten-Fächer (${favorites.length})</h3>
-                <p style="font-size:13px; color:var(--text-muted); margin-top:2px;">Markiere Fächer in der Seitenleiste mit ⭐ für Schnellzugriff.</p>
-              </div>
-              ${isAdmin() ? `<button type="button" class="btn-secondary" onclick="openAddSubjectView()">➕ Neues Fach hinzufügen</button>` : ""}
-            </div>
-            ${favorites.length === 0
-              ? `<p style="font-size:13.5px; color:var(--text-muted); margin-top:12px;">Noch keine Favoriten markiert. Klicke in der Seitenleiste auf ⭐ neben einem Fach.</p>`
-              : `<div class="fav-grid">
-                  ${favorites.map(sub => {
-                    const safeSubId = escapeJsSingle(sub.id);
-                    const dotColor = isSafeCssColor(sub.color) ? sub.color : "#2563eb";
-                    const visFolders = (Array.isArray(sub.folders) ? sub.folders : []).filter(f => canUserSeeFolder(f, currentUser));
-                    return `
-                      <div class="fav-card" style="border-top-color:${dotColor};">
-                        <div>
-                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <span style="font-size:24px;">${escapeHtml(sub.icon)}</span>
-                            <span onclick="toggleFavoriteSubject('${safeSubId}', event)" title="Aus Favoriten entfernen" style="cursor:pointer; font-size:16px;">⭐</span>
-                          </div>
-                          <div style="font-weight:800; font-size:16px;">${escapeHtml(sub.name)}</div>
-                          <div style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">${visFolders.length} sichtbare Ordner</div>
-                        </div>
-                        <button class="btn-primary" style="width:100%; justify-content:center;" onclick="openFavoriteSubject('${safeSubId}')">Fach öffnen →</button>
-                      </div>
-                    `;
-                  }).join("")}
-                </div>`
-            }
-          </div>
-        `;
-      } else if (currentView === "library") {
-        heading.innerText = "📚 Meine Bibliothek";
-        container.innerHTML = renderMyLibraryView();
-      } else if (currentView === "folder-search") {
-        heading.innerText = "🔎 Ordner suchen";
-        container.innerHTML = renderFolderSearchView();
-      } else if (currentView === "chat") {
-        heading.innerText = "💬 Chat, Freunde & Kalender";
-        container.innerHTML = renderChatFriendsView();
-      } else if (currentView === "leaderboard") {
-        heading.innerText = "🏆 Leaderboard";
-        container.innerHTML = renderLeaderboardView();
-      } else if (currentView === "calendar") {
-        heading.innerText = "📅 Prüfungskalender";
-        container.innerHTML = renderCalendarView();
-      } else if (currentView === "custom-exam") {
-        heading.innerText = "🎓 Eigene Prüfung";
-        container.innerHTML = renderCustomExamView(visible);
-      } else if (currentView === "derivative-trainer") {
-        heading.innerText = "📈 Ableitungstrainer";
-        container.innerHTML = `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-              <div><h3>📈 Interaktiver Ableitungstrainer</h3><p style="font-size:13px; color:var(--text-muted);">Aufgaben generieren, $f'(x)$ eintippen und Punkte sammeln.</p></div>
-              <select id="derivLevel" class="select-field" style="width:auto; margin:0;" onchange="generateDerivativeTask()">
-                <option value="poly">Polynom / Potenzregel</option>
-                <option value="chain">Sinus &amp; Kettenregel</option>
-                <option value="exp">e-Funktion &amp; Kettenregel</option>
-                <option value="all">🎲 Alle Typen gemischt</option>
-              </select>
-            </div>
-            <div id="derivTaskDisplay"></div>
-          </div>
-          ${renderSpickzettelAbleitungenCard()}
-        `;
-        generateDerivativeTask();
-      } else if (currentView === "vocab-trainer") {
-        heading.innerText = "🇬🇧 Vokabeltrainer";
-        container.innerHTML = renderVocabTrainerView();
-      } else if (currentView === "formulas") {
-        heading.innerText = "📐 Formelsammlung & Rechner";
-        const customFolderTabsHtml = customFormulaFolders.map(ff => {
-          const isAct = activeCalcTab === "folder:" + ff.id;
-          return `
-            <button class="btn-secondary" style="${isAct ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='folder:${escapeJsSingle(ff.id)}'; renderView();">
-              📁 ${escapeHtml(ff.name)}
-            </button>
-          `;
-        }).join("");
-
-        const createFolderBarHtml = isAdmin() ? `
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; padding:10px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:12px;">
-            <span style="font-size:12.5px; font-weight:700;">➕ Neuer Formel-Ordner:</span>
-            <input type="text" id="newFormulaFolderInput" class="input-field" style="margin:0; width:210px; padding:7px 10px;" placeholder="z. B. Thermodynamik" onkeydown="if(event.key==='Enter'){event.preventDefault();createFormulaFolderFromInput();}">
-            <button type="button" class="btn-primary" style="padding:7px 13px; font-size:12.5px;" onclick="createFormulaFolderFromInput()">Ordner anlegen</button>
-          </div>
-        ` : "";
-
-        container.innerHTML = `
-          <div class="card">
-            ${createFolderBarHtml}
-            <div class="tab-strip">
-              <button class="btn-secondary" style="${activeCalcTab === 'cutting' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='cutting'; renderView();">⚙️ Schnittgeschwindigkeit</button>
-              <button class="btn-secondary" style="${activeCalcTab === 'ohm' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='ohm'; renderView();">⚡ Ohmsches Gesetz</button>
-              <button class="btn-secondary" style="${activeCalcTab === 'quadratic' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='quadratic'; renderView();">🔢 abc-Formel</button>
-              ${customFolderTabsHtml}
-              <button class="btn-secondary" style="${activeCalcTab === 'custom' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='custom'; renderView();">🧩 Eigene Formeln (${customFormulas.length})</button>
-            </div>
-            ${activeCalcTab === 'custom' ? renderCustomFormulasTabContent() : renderCalculatorContent()}
             ${isAdmin() ? `
-              <div class="ai-code-box">
-                <strong style="font-size:14px;">🧩 Neue Formel per Code hinzufügen (Admin)</strong>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Füge hier ein JSON-Objekt mit <code>title</code>, <code>formula</code> und <code>calcExpr</code> (Variablen <code>v1</code>, <code>v2</code>) ein:</div>
-                <textarea id="formulaCodeInput" class="code-textarea" placeholder='{"title":"Hebelgesetz","category":"Mechanik","formula":"F_1 \\\\cdot l_1 = F_2 \\\\cdot l_2","description":"Berechnet die Gegenkraft F2 im Gleichgewicht.","variables":[{"symbol":"F_1","meaning":"Kraft 1 in N"},{"symbol":"l_1","meaning":"Hebelarm 1 in m"},{"symbol":"l_2","meaning":"Hebelarm 2 in m"}],"var1Label":"Kraft F1 [N]","var1Default":100,"var2Label":"Hebelarm l1/l2","var2Default":2,"calcExpr":"v1 * v2"}'></textarea>
-                <button class="btn-primary" onclick="importCustomFormulaCode()">📥 Formel-Code übernehmen</button>
-                <div id="formulaImportFeedback"></div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="text" id="newFormulaFolderInput" class="input-field" style="margin:0; width:190px;" placeholder="Neuer Ordner (z. B. Statik)..." onkeydown="if(event.key==='Enter'){event.preventDefault();createFormulaFolderFromInput();}">
+                <button type="button" class="btn-secondary" onclick="createFormulaFolderFromInput()">+ Ordner anlegen</button>
               </div>
             ` : ""}
           </div>
-          ${renderSpickzettelAbleitungenCard()}
-        `;
-      } else if (currentView === "matura-textsorten") {
-        heading.innerText = "📝 Matura-Textsorten (Deutsch & Englisch)";
-        container.innerHTML = renderMaturaTextsortenView();
-      } else if (currentView === "contact") {
-        heading.innerText = "✉️ Kontakt & Support";
-        container.innerHTML = renderContactView();
-      } else if (currentView === "imprint") {
-        heading.innerText = "📄 Impressum";
-        container.innerHTML = renderImprintView();
-      } else if (currentView === "settings") {
-        heading.innerText = "⚙️ Einstellungen & Passwort";
-        container.innerHTML = renderSettingsView();
-      } else if (currentView === "admin") {
-        if (!isAdmin()) return navigate("home");
-        heading.innerText = "🛡️ Admin-Bereich";
-        container.innerHTML = renderAdminView();
-      } else if (currentView.startsWith("subject-")) {
-        const subId = currentView.replace("subject-", "");
-        const sub = visible.find(s => s.id === subId);
-        if (!sub) return navigate("home");
-        heading.innerText = `${sub.icon} ${sub.name}`;
-        container.innerHTML = renderSubjectView(sub);
-      }
 
-      typesetMath(container);
+          <div class="tab-strip">
+            <button class="btn-secondary" style="${activeCalcTab === 'cutting' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='cutting'; renderView();">⚙️ Schnittgeschwindigkeit</button>
+            <button class="btn-secondary" style="${activeCalcTab === 'ohm' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='ohm'; renderView();">⚡ Ohm &amp; Leistung</button>
+            <button class="btn-secondary" style="${activeCalcTab === 'quad' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='quad'; renderView();">🔢 Quadratische Gl.</button>
+            ${customFormulaFolders.map(folder => {
+              const tabKey = "folder:" + folder.id;
+              const isAct = activeCalcTab === tabKey;
+              const fCount = customFormulas.filter(cf => cf.folderId === folder.id).length;
+              return `
+                <span style="display:inline-flex; align-items:center; gap:4px;">
+                  <button class="btn-secondary" style="${isAct ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='${escapeJsSingle(tabKey)}'; renderView();">
+                    📁 ${escapeHtml(folder.name)} (${fCount})
+                  </button>
+                  ${isAdmin() ? `<button class="btn-danger" style="padding:5px 8px;" title="Ordner löschen" onclick="deleteFormulaFolder('${escapeJsSingle(folder.id)}')">✕</button>` : ""}
+                </span>
+              `;
+            }).join("")}
+            ${customFormulas.map(cf => `
+              <span style="display:inline-flex; align-items:center; gap:4px;">
+                <button class="btn-secondary" style="${activeCalcTab === cf.key ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='${escapeJsSingle(cf.key)}'; renderView();">
+                  📌 ${escapeHtml(cf.title)}
+                </button>
+                ${isAdmin() ? `<button class="btn-danger" style="padding:5px 8px;" title="Formel löschen" onclick="deleteCustomFormula('${escapeJsSingle(cf.key)}')">✕</button>` : ""}
+              </span>
+            `).join("")}
+          </div>
+
+          ${selectedFolderObj ? `
+            <div style="margin-bottom:14px;">
+              <h4 style="margin-bottom:8px;">📁 Ordner: ${escapeHtml(selectedFolderObj.name)}</h4>
+              ${formulasInSelectedFolder.length === 0
+                ? `<p style="font-size:13.5px; color:var(--text-muted);">In diesem Ordner sind noch keine Formeln gespeichert. Unten kannst du direkt eine neue Formel diesem Ordner zuweisen.</p>`
+                : formulasInSelectedFolder.map(cf => `
+                  <div class="exam-item-box" style="margin-bottom:10px;">
+                    <div>
+                      <strong>📌 ${escapeHtml(cf.title)}</strong>
+                      <div style="margin-top:6px; font-size:16px;">${cf.latex}</div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                      <button type="button" class="btn-secondary" onclick="activeCalcTab='${escapeJsSingle(cf.key)}'; renderView();">Details</button>
+                      ${isAdmin() ? `<button type="button" class="btn-danger" onclick="deleteCustomFormula('${escapeJsSingle(cf.key)}')">Löschen</button>` : ""}
+                    </div>
+                  </div>
+                `).join("")
+              }
+            </div>
+          ` : `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+              <h4 style="font-size:17px;">${escapeHtml(current.title)}</h4>
+              ${isCustom && isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${escapeJsSingle(current.key)}')">Formel löschen</button>` : ""}
+            </div>
+
+            <div class="formula-box">${current.latex}</div>
+
+            ${Array.isArray(current.vars) && current.vars.length > 0 ? `
+              <table class="var-table">
+                <thead>
+                  <tr>
+                    <th>Größe</th>
+                    <th>Bedeutung &amp; Einheit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${current.vars.map(v => `
+                    <tr>
+                      <td class="var-sym">${v.sym}</td>
+                      <td>${v.desc}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            ` : ""}
+
+            ${!isCustom && Array.isArray(current.inputs) ? `
+              <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+                <h5 style="margin-bottom:10px; font-size:14px;">🧮 Schneller Taschenrechner</h5>
+                <div class="form-grid-2">
+                  ${current.inputs.map(inp => `
+                    <div>
+                      <label style="font-size:12.5px; font-weight:600;">${escapeHtml(inp.label)}</label>
+                      <input type="number" step="any" id="calc_${escapeHtml(inp.id)}" class="input-field" value="${escapeHtml(inp.val)}" oninput="updateFormulaCalc()">
+                    </div>
+                  `).join("")}
+                </div>
+                <div id="formulaCalcResult" class="result-banner result-ok"></div>
+              </div>
+            ` : ""}
+          `}
+
+          ${isAdmin() ? `
+            <div class="ai-code-box">
+              <strong style="font-size:14px;">➕ Eigene Formel zur Sammlung hinzufügen</strong>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:2px; margin-bottom:10px;">
+                Füge eine neue Formel mit LaTeX-Ausdruck, Ordnerzuordnung und Formelzeichen-Legende hinzu.
+              </div>
+              <div class="form-grid-2">
+                <div>
+                  <label style="font-size:12px; font-weight:600;">Formeltitel *</label>
+                  <input type="text" id="newFormulaTitle" class="input-field" placeholder="z. B. Biegemoment Balken">
+                </div>
+                <div>
+                  <label style="font-size:12px; font-weight:600;">Ordner (optional)</label>
+                  <select id="newFormulaFolderSelect" class="select-field">
+                    <option value="">— Kein Ordner (Direkt in Sammlung) —</option>
+                    ${customFormulaFolders.map(f => `<option value="${escapeHtml(f.id)}" ${activeCustomFolderId === f.id ? "selected" : ""}>📁 ${escapeHtml(f.name)}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+              <label style="font-size:12px; font-weight:600;">Formel (LaTeX, z. B. \\sigma_b = \\frac{M_b}{W_b}) *</label>
+              <input type="text" id="newFormulaLatex" class="input-field" placeholder="z. B. \\sigma_b = \\frac{M_b}{W_b}">
+              <div class="form-grid-2">
+                <div>
+                  <label style="font-size:12px; font-weight:600;">Formelzeichen 1 (optional)</label>
+                  <input type="text" id="newVar1Sym" class="input-field" placeholder="z. B. \\sigma_b">
+                </div>
+                <div>
+                  <label style="font-size:12px; font-weight:600;">Bedeutung 1 (optional)</label>
+                  <input type="text" id="newVar1Desc" class="input-field" placeholder="z. B. Biegespannung in N/mm²">
+                </div>
+              </div>
+              <div class="form-grid-2">
+                <div>
+                  <label style="font-size:12px; font-weight:600;">Formelzeichen 2 (optional)</label>
+                  <input type="text" id="newVar2Sym" class="input-field" placeholder="z. B. W_b">
+                </div>
+                <div>
+                  <label style="font-size:12px; font-weight:600;">Bedeutung 2 (optional)</label>
+                  <input type="text" id="newVar2Desc" class="input-field" placeholder="z. B. Widerstandsmoment in mm³">
+                </div>
+              </div>
+              <button type="button" class="btn-primary" onclick="addCustomFormula()">💾 Formel speichern</button>
+            </div>
+          ` : ""}
+        </div>
+
+        ${renderSpickzettelAbleitungenCard()}
+      `;
+    }
+
+    function updateFormulaCalc() {
+      const current = formulaCatalog[activeCalcTab];
+      const out = document.getElementById("formulaCalcResult");
+      if (!current || !out || !Array.isArray(current.inputs)) return;
+      const vals = {};
+      current.inputs.forEach(inp => {
+        const el = document.getElementById("calc_" + inp.id);
+        vals[inp.id] = el ? parseFloat(el.value) || 0 : inp.val;
+      });
+      out.innerHTML = current.calc(vals);
+      typesetMath(out);
+    }
+
+    const derivativePool = [
+      { cat: "potenz", ruleLabel: "Potenzregel", promptTex: "$$f(x) = 4x^3 - 5x^2 + 6x - 9$$", solutionTex: "$$f'(x) = 12x^2 - 10x + 6$$", answers: ["12x^2-10x+6", "12x**2-10x+6"], hint: "Exponent nach vorne ziehen und um 1 verringern." },
+      { cat: "potenz", ruleLabel: "Potenzregel & Bruch", promptTex: "$$f(x) = \\frac{6}{x^2} + 2x^3$$", solutionTex: "$$f'(x) = -\\frac{12}{x^3} + 6x^2$$", answers: ["-12/x^3+6x^2", "-12x^-3+6x^2"], hint: "$\\frac{6}{x^2} = 6x^{-2}$ ableiten." },
+      { cat: "wurzel", ruleLabel: "Wurzelregel", promptTex: "$$f(x) = 4\\sqrt{x} + 3x$$", solutionTex: "$$f'(x) = \\frac{2}{\\sqrt{x}} + 3$$", answers: ["2/sqrt(x)+3", "4/(2*sqrt(x))+3"], hint: "$(\\sqrt{x})' = \\frac{1}{2\\sqrt{x}}$." },
+      { cat: "trig", ruleLabel: "Trigonometrie", promptTex: "$$f(x) = 3\\sin(x) - 2\\cos(x)$$", solutionTex: "$$f'(x) = 3\\cos(x) + 2\\sin(x)$$", answers: ["3cos(x)+2sin(x)"], hint: "$(\\sin x)' = \\cos x$, $(\\cos x)' = -\\sin x$." },
+      { cat: "exp", ruleLabel: "e-Funktion & ln", promptTex: "$$f(x) = 5e^x + 4\\ln(x)$$", solutionTex: "$$f'(x) = 5e^x + \\frac{4}{x}$$", answers: ["5e^x+4/x", "5*e^x+4/x"], hint: "$(e^x)' = e^x$, $(\\ln x)' = \\frac{1}{x}$." },
+      { cat: "produkt", ruleLabel: "Produktregel", promptTex: "$$f(x) = x^2 \\cdot e^x$$", solutionTex: "$$f'(x) = 2x e^x + x^2 e^x = x e^x (2 + x)$$", answers: ["2xe^x+x^2e^x", "xe^x(2+x)", "x*e^x*(2+x)"], hint: "$(u \\cdot v)' = u'v + uv'$ mit $u = x^2$, $v = e^x$." },
+      { cat: "kette", ruleLabel: "Kettenregel", promptTex: "$$f(x) = (3x + 2)^4$$", solutionTex: "$$f'(x) = 12(3x + 2)^3$$", answers: ["12(3x+2)^3", "4(3x+2)^3*3", "12*(3x+2)^3"], hint: "Äußere Ableitung $\\cdot$ innere Ableitung ($3$)." }
+    ];
+
+    function pickNewDerivativeExercise(catOverride) {
+      if (typeof catOverride === "string") activeDerivCategory = catOverride;
+      const list = activeDerivCategory === "all"
+        ? derivativePool
+        : derivativePool.filter(item => item.cat === activeDerivCategory);
+      const source = list.length ? list : derivativePool;
+      const candidates = source.filter(item => !currentDerivExercise || item.promptTex !== currentDerivExercise.promptTex);
+      const pool = candidates.length ? candidates : source;
+      currentDerivExercise = pool[Math.floor(Math.random() * pool.length)];
+      derivFeedback = null;
+    }
+
+    function normalizeDerivInput(str) {
+      return String(str || "")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/f'\(x\)=/g, "")
+        .replace(/y'=/g, "")
+        .replace(/,/g, ".");
+    }
+
+    function checkDerivativeAnswer() {
+      if (!currentDerivExercise) pickNewDerivativeExercise();
+      const inputEl = document.getElementById("derivAnswerInput");
+      const raw = inputEl ? inputEl.value : "";
+      const normUser = normalizeDerivInput(raw);
+      if (!normUser) return;
+
+      const isCorrect = currentDerivExercise.answers.some(ans => normalizeDerivInput(ans) === normUser);
+      if (isCorrect) {
+        derivStreak += 1;
+        const res = recordLearningActivity(10);
+        const streakMsg = res.streakIncreased ? ` · Tages-Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
+        derivFeedback = {
+          ok: true,
+          html: `✅ Richtig! ${currentDerivExercise.solutionTex} · Aufgaben-Serie: <strong>${derivStreak}</strong> (+10 Pkt${escapeHtml(streakMsg)})`
+        };
+      } else {
+        derivStreak = 0;
+        derivFeedback = {
+          ok: false,
+          html: `❌ Nicht ganz. Musterlösung: ${currentDerivExercise.solutionTex}`
+        };
+      }
+      renderView();
+    }
+
+    function renderDerivativeTrainerView() {
+      if (!currentDerivExercise) pickNewDerivativeExercise();
+      const cats = [
+        { id: "all", label: "Alle Regeln" },
+        { id: "potenz", label: "Potenz & Bruch" },
+        { id: "wurzel", label: "Wurzel" },
+        { id: "trig", label: "Sin / Cos" },
+        { id: "exp", label: "e^x & ln(x)" },
+        { id: "produkt", label: "Produktregel" },
+        { id: "kette", label: "Kettenregel" }
+      ];
+
+      return `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+            <div>
+              <h3 style="font-size:19px;">📈 Ableitungstrainer</h3>
+              <p style="font-size:13px; color:var(--text-muted);">Bilde die 1. Ableitung $f'(x)$ und prüfe dein Ergebnis direkt.</p>
+            </div>
+            <span class="points-pill" style="cursor:default;">Serie: ${derivStreak} 🔥</span>
+          </div>
+
+          <div class="filter-strip">
+            ${cats.map(c => `
+              <button class="filter-btn ${activeDerivCategory === c.id ? 'active' : ''}" onclick="pickNewDerivativeExercise('${c.id}'); renderView();">
+                ${c.label}
+              </button>
+            `).join("")}
+          </div>
+
+          <div class="question-card">
+            <span class="count-pill">${escapeHtml(currentDerivExercise.ruleLabel)}</span>
+            <div class="formula-box" style="margin:12px 0;">${currentDerivExercise.promptTex}</div>
+            <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:10px;">
+              Tipp: ${escapeHtml(currentDerivExercise.hint)}
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <input type="text" id="derivAnswerInput" class="input-field" style="margin:0; flex:1; min-width:200px;" placeholder="z. B. 12x^2-10x+6" onkeydown="if(event.key==='Enter'){event.preventDefault();checkDerivativeAnswer();}">
+              <button class="btn-primary" onclick="checkDerivativeAnswer()">Prüfen</button>
+              <button class="btn-secondary" onclick="pickNewDerivativeExercise(); renderView();">Neue Aufgabe</button>
+            </div>
+            ${derivFeedback ? `<div class="result-banner ${derivFeedback.ok ? 'result-ok' : 'result-err'}">${derivFeedback.html}</div>` : ""}
+          </div>
+        </div>
+
+        ${renderSpickzettelAbleitungenCard()}
+      `;
     }
 
     function renderLeaderboardView() {
@@ -4949,10 +5155,10 @@
             <div>
               <h3 style="font-size:19px;">🏆 Lern-Leaderboard</h3>
               <p style="font-size:13px; color:var(--text-muted);">
-                Dein aktueller Platz: <strong>#${myRank}</strong> · Punkte: <strong>${currentUser.points} Pkt</strong> · Streak: <strong>${currentUser.streak || 0} Tage 🔥</strong>
+                Dein Platz: <strong>#${myRank}</strong> von ${activeList.length} · <strong>${currentUser.points || 0} Pkt</strong> · <strong>${currentUser.streak || 0} Tage Streak 🔥</strong>
               </p>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="display:flex; gap:8px;">
               <button type="button" class="btn-secondary" style="${leaderboardTab === 'points' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="leaderboardTab='points'; renderView();">
                 🏆 Nach Punkten
               </button>
@@ -4966,26 +5172,24 @@
             const rank = idx + 1;
             const rankClass = rank === 1 ? "rank-1" : rank === 2 ? "rank-2" : rank === 3 ? "rank-3" : "";
             const isMe = u.id === currentUser.id;
-            const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
             return `
               <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <div class="rank-badge ${rankClass}">${medal}</div>
-                  <div class="avatar-circle">${escapeHtml(u.initials)}</div>
+                  <div class="rank-badge ${rankClass}">${rank}</div>
                   <div>
                     <div style="font-weight:800; font-size:15px;">
                       ${escapeHtml(u.name)}
-                      <span class="role-badge">${escapeHtml(u.role)}</span>
-                      ${isMe ? `<span class="count-pill" style="margin-left:4px;">Du</span>` : ""}
+                      <span class="role-badge" style="margin-left:6px;">${escapeHtml(u.role)}</span>
+                      ${isMe ? `<span class="count-pill" style="margin-left:6px;">Du</span>` : ""}
                     </div>
                     <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-                      ${u.learnedToday ? "✅ Heute aktiv gelernt" : "⏳ Heute noch nicht gelernt"}
+                      Streak: <strong>${u.streak || 0} ${(u.streak || 0) === 1 ? "Tag" : "Tage"} 🔥</strong>
                     </div>
                   </div>
                 </div>
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                  <span class="count-pill" style="font-size:13px; padding:5px 10px;">🔥 ${u.streak || 0} Tage</span>
-                  <span class="points-pill" style="cursor:default; transform:none; font-size:13px;">${u.points || 0} Pkt 🏆</span>
+                <div style="text-align:right;">
+                  <div style="font-weight:800; font-size:16px; color:var(--accent);">${u.points || 0} Pkt</div>
+                  <div style="font-size:12px; color:var(--text-muted);">${u.streak || 0}d 🔥</div>
                 </div>
               </div>
             `;
@@ -4994,7 +5198,7 @@
       `;
     }
 
-    function renderChatFriendsView() {
+    function renderChatAndFriendsView() {
       const friends = getAcceptedFriends(currentUser.id);
       const incoming = getIncomingRequests(currentUser.id);
       const outgoing = getOutgoingRequests(currentUser.id);
@@ -5002,26 +5206,26 @@
       if (!activeChatPartnerId && friends.length > 0) {
         activeChatPartnerId = friends[0].id;
       } else if (activeChatPartnerId && !friends.some(f => f.id === activeChatPartnerId)) {
-        activeChatPartnerId = friends[0]?.id || null;
+        activeChatPartnerId = friends.length > 0 ? friends[0].id : null;
       }
 
       const activePartner = friends.find(f => f.id === activeChatPartnerId) || null;
       const myExams = getUserExams(currentUser.id);
 
       const q = friendSearchQuery.trim().toLowerCase();
-      const searchCandidates = users.filter(u => {
+      const discoverableUsers = users.filter(u => {
         if (u.id === currentUser.id) return false;
-        const isAlreadyFriend = friends.some(f => f.id === u.id);
-        const hasPending = friendships.some(fr =>
-          fr.status === "pending" &&
-          ((fr.fromId === currentUser.id && fr.toId === u.id) || (fr.fromId === u.id && fr.toId === currentUser.id))
+        const isFriend = friends.some(f => f.id === u.id);
+        const isPending = friendships.some(f =>
+          f.status === "pending" &&
+          ((f.fromId === currentUser.id && f.toId === u.id) || (f.fromId === u.id && f.toId === currentUser.id))
         );
-        if (isAlreadyFriend || hasPending) return false;
+        if (isFriend || isPending) return false;
         if (!q) return true;
         return u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q);
       });
 
-      const threadMessages = activePartner
+      const conversation = activePartner
         ? chatMessages.filter(m =>
             (m.fromId === currentUser.id && m.toId === activePartner.id) ||
             (m.fromId === activePartner.id && m.toId === currentUser.id)
@@ -5029,70 +5233,76 @@
         : [];
 
       return `
+        <div class="card">
+          <h3 style="font-size:19px; margin-bottom:4px;">💬 Chat, Freunde &amp; Prüfungskalender teilen</h3>
+          <p style="font-size:13px; color:var(--text-muted);">
+            Schreibe mit bestätigten Freunden, teile einzelne Prüfungstermine oder deinen gesamten Kalender und übernimm fremde Termine in deinen eigenen Kalender.
+          </p>
+        </div>
+
+        ${incoming.length > 0 ? `
+          <div class="exam-warning-card">
+            <strong style="display:block; margin-bottom:10px; color:var(--warning-text);">📩 Offene Freundschaftsanfragen (${incoming.length})</strong>
+            ${incoming.map(req => {
+              const sender = users.find(u => u.id === req.fromId);
+              if (!sender) return "";
+              return `
+                <div class="exam-item-box">
+                  <div>
+                    <strong>${escapeHtml(sender.name)}</strong> <span class="role-badge">${escapeHtml(sender.role)}</span>
+                    <div style="font-size:12px; color:var(--text-muted);">Möchte mit dir chatten und Kalender teilen.</div>
+                  </div>
+                  <div style="display:flex; gap:8px;">
+                    <button class="btn-primary" style="padding:7px 12px; font-size:12.5px;" onclick="acceptFriendRequest('${escapeJsSingle(req.id)}')">Annehmen</button>
+                    <button class="btn-danger" onclick="declineFriendRequest('${escapeJsSingle(req.id)}')">Ablehnen</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        ` : ""}
+
         <div class="chat-layout">
           <div class="card" style="margin-bottom:0;">
-            <h3 style="font-size:16px; margin-bottom:10px;">👥 Deine Freunde (${friends.length})</h3>
+            <h4 style="margin-bottom:10px;">👥 Meine Freunde (${friends.length})</h4>
             ${friends.length === 0
-              ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Noch keine Freunde verbunden. Suche unten nach Mitschülern und sende eine Anfrage.</p>`
+              ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Noch keine Freunde hinzugefügt.</p>`
               : friends.map(f => {
-                  const isAct = activePartner && f.id === activePartner.id;
+                  const isSel = activePartner && activePartner.id === f.id;
                   return `
-                    <div class="friend-row ${isAct ? 'active' : ''}" onclick="activeChatPartnerId=${f.id}; renderView();">
-                      <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="avatar-circle" style="width:32px; height:32px; font-size:12px;">${escapeHtml(f.initials)}</div>
-                        <div>
-                          <div style="font-weight:700; font-size:13.5px;">${escapeHtml(f.name)}</div>
-                          <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(f.role)} · ${f.points} Pkt</div>
-                        </div>
+                    <div class="friend-row ${isSel ? 'active' : ''}" onclick="activeChatPartnerId=${f.id}; renderView();">
+                      <div>
+                        <div style="font-weight:700; font-size:14px;">${escapeHtml(f.name)}</div>
+                        <div style="font-size:11.5px; color:var(--text-muted);">${escapeHtml(f.role)} · ${f.points || 0} Pkt</div>
                       </div>
-                      <span style="font-size:12px;">💬</span>
+                      <span style="font-size:16px;">${isSel ? "💬" : "›"}</span>
                     </div>
                   `;
                 }).join("")
             }
 
-            ${incoming.length > 0 ? `
-              <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
-                <div class="nav-section-label" style="padding:0; margin-bottom:8px;">Anfragen an dich (${incoming.length})</div>
-                ${incoming.map(req => {
-                  const sender = users.find(u => u.id === req.fromId);
-                  if (!sender) return "";
-                  return `
-                    <div class="friend-row" style="cursor:default; flex-direction:column; align-items:stretch;">
-                      <div style="font-weight:700; font-size:13px;">${escapeHtml(sender.name)} <span class="role-badge">${escapeHtml(sender.role)}</span></div>
-                      <div style="display:flex; gap:6px; margin-top:8px;">
-                        <button type="button" class="btn-primary" style="padding:5px 10px; font-size:12px;" onclick="acceptFriendRequest('${escapeJsSingle(req.id)}')">Annehmen</button>
-                        <button type="button" class="btn-danger" onclick="declineFriendRequest('${escapeJsSingle(req.id)}')">Ablehnen</button>
-                      </div>
-                    </div>
-                  `;
+            ${outgoing.length > 0 ? `
+              <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
+                <div style="font-size:11.5px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">Gesendete Anfragen (${outgoing.length})</div>
+                ${outgoing.map(req => {
+                  const target = users.find(u => u.id === req.toId);
+                  return `<div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">⏳ ${escapeHtml(target ? target.name : "Nutzer")} (ausstehend)</div>`;
                 }).join("")}
               </div>
             ` : ""}
 
-            ${outgoing.length > 0 ? `
-              <div style="margin-top:12px; font-size:12px; color:var(--text-muted);">
-                Gesendete Anfragen offen: <strong>${outgoing.length}</strong>
-              </div>
-            ` : ""}
-
             <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
-              <div class="nav-section-label" style="padding:0; margin-bottom:6px;">Freunde finden &amp; hinzufügen</div>
-              <input type="text"
-                     class="input-field"
-                     style="margin-bottom:8px; padding:8px 10px; font-size:13px;"
-                     placeholder="Name oder Rolle suchen..."
-                     value="${escapeHtml(friendSearchQuery)}"
-                     oninput="friendSearchQuery = this.value; renderView();">
-              ${searchCandidates.length === 0
-                ? `<div style="font-size:12px; color:var(--text-muted);">Keine weiteren Personen gefunden.</div>`
-                : searchCandidates.map(u => `
-                  <div class="friend-row" style="cursor:default; padding:8px 10px;">
+              <h4 style="margin-bottom:8px; font-size:14px;">➕ Freund hinzufügen</h4>
+              <input type="text" class="input-field" style="margin-bottom:8px;" placeholder="Name suchen..." value="${escapeHtml(friendSearchQuery)}" oninput="friendSearchQuery=this.value; renderView();">
+              ${discoverableUsers.length === 0
+                ? `<p style="font-size:12px; color:var(--text-muted);">Keine weiteren Personen gefunden.</p>`
+                : discoverableUsers.map(u => `
+                  <div class="friend-row" style="cursor:default;">
                     <div>
-                      <div style="font-weight:700; font-size:13px;">${escapeHtml(u.name)}</div>
+                      <div style="font-weight:700; font-size:13.5px;">${escapeHtml(u.name)}</div>
                       <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(u.role)}</div>
                     </div>
-                    <button type="button" class="btn-secondary" style="padding:5px 9px; font-size:11.5px;" onclick="sendFriendRequest(${u.id})">+ Anfragen</button>
+                    <button class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="sendFriendRequest(${u.id})">+ Anfrage</button>
                   </div>
                 `).join("")
               }
@@ -5103,39 +5313,35 @@
             ${!activePartner ? `
               <div style="padding:24px; text-align:center; color:var(--text-muted);">
                 <div style="font-size:32px; margin-bottom:8px;">💬</div>
-                <h3 style="color:var(--text-main); margin-bottom:6px;">Kein Freundes-Chat ausgewählt</h3>
-                <p style="font-size:13.5px;">Nimm links eine Freundschaftsanfrage an oder sende eine Anfrage, um privat zu chatten und Kalender/Prüfungen zu teilen.</p>
+                <div style="font-weight:700; font-size:15px; margin-bottom:4px;">Kein Freund für den Chat ausgewählt</div>
+                <div style="font-size:13px;">Sende links eine Freundschaftsanfrage oder nimm eine offene Anfrage an, um zu chatten und Kalender zu teilen.</div>
               </div>
             ` : `
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding-bottom:12px; border-bottom:1px solid var(--border); margin-bottom:12px;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                  <div class="avatar-circle">${escapeHtml(activePartner.initials)}</div>
-                  <div>
-                    <h3 style="font-size:17px;">${escapeHtml(activePartner.name)} <span class="role-badge">${escapeHtml(activePartner.role)}</span></h3>
-                    <div style="font-size:12px; color:var(--text-muted);">Bestätigter Freund · Privater Chat &amp; Kalender-Freigabe</div>
-                  </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding-bottom:10px; border-bottom:1px solid var(--border); margin-bottom:12px;">
+                <div>
+                  <h4 style="font-size:16px;">Chat mit ${escapeHtml(activePartner.name)}</h4>
+                  <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(activePartner.role)} · ${activePartner.points || 0} Pkt</div>
                 </div>
                 <button type="button" class="btn-secondary" onclick="shareFullCalendarInChat()">
-                  📆 Ganzen Kalender teilen (${myExams.length})
+                  📆 Gesamten Kalender teilen (${myExams.length})
                 </button>
               </div>
 
-              <div id="chatMessagesBox" class="chat-messages-box">
-                ${threadMessages.length === 0
-                  ? `<div style="text-align:center; color:var(--text-muted); font-size:13px; margin:auto;">Noch keine Nachrichten mit ${escapeHtml(activePartner.name)}. Schreib die erste Nachricht!</div>`
-                  : threadMessages.map(m => {
+              <div class="chat-messages-box" id="chatMessagesBox">
+                ${conversation.length === 0
+                  ? `<p style="font-size:13px; color:var(--text-muted); text-align:center; margin:auto;">Noch keine Nachrichten. Schreib die erste Nachricht oder teile einen Prüfungstermin!</p>`
+                  : conversation.map(m => {
                       const isMe = m.fromId === currentUser.id;
-                      const safeMsgId = escapeJsSingle(m.id);
                       return `
                         <div class="chat-bubble ${isMe ? 'me' : 'other'}">
                           <div>${escapeHtml(m.text)}</div>
                           ${m.examData ? `
                             <div class="shared-exam-card">
-                              <div style="font-size:11px; font-weight:800; color:#b45309;">📅 GETEILTER PRÜFUNGSTERMIN</div>
-                              <div style="font-weight:800; font-size:14px; margin-top:2px;">${escapeHtml(m.examData.title)}</div>
-                              <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(m.examData.subject)} • ${escapeHtml(m.examData.date)}${m.examData.notes ? " • " + escapeHtml(m.examData.notes) : ""}</div>
+                              <div style="font-weight:800; font-size:13.5px;">📅 ${escapeHtml(m.examData.title)}</div>
+                              <div style="font-size:12px; margin-top:2px;">Fach: <strong>${escapeHtml(m.examData.subject)}</strong> · Datum: <strong>${escapeHtml(m.examData.date)}</strong></div>
+                              ${m.examData.notes ? `<div style="font-size:12px; margin-top:2px;">Notiz: ${escapeHtml(m.examData.notes)}</div>` : ""}
                               ${!isMe ? `
-                                <button type="button" class="btn-primary" style="margin-top:8px; padding:6px 11px; font-size:12px;" onclick="adoptSharedExam('${safeMsgId}')">
+                                <button type="button" class="btn-primary" style="margin-top:8px; padding:6px 11px; font-size:12px;" onclick="adoptSharedExam('${escapeJsSingle(m.id)}')">
                                   ➕ In meinen Kalender übernehmen
                                 </button>
                               ` : ""}
@@ -5143,14 +5349,12 @@
                           ` : ""}
                           ${m.calendarShare && Array.isArray(m.calendarShare.items) ? `
                             <div class="shared-exam-card">
-                              <div style="font-size:11px; font-weight:800; color:#b45309;">📆 GETEILTER KALENDER VON ${escapeHtml(m.calendarShare.ownerName.toUpperCase())}</div>
+                              <div style="font-weight:800; font-size:13.5px;">📆 Kalender von ${escapeHtml(m.calendarShare.ownerName)} (${m.calendarShare.items.length} Termine)</div>
                               <ul class="shared-calendar-list">
-                                ${m.calendarShare.items.map(it => `
-                                  <li><strong>${escapeHtml(it.date)}</strong> – ${escapeHtml(it.title)} (${escapeHtml(it.subject)})</li>
-                                `).join("")}
+                                ${m.calendarShare.items.map(it => `<li><strong>${escapeHtml(it.date)}</strong> – ${escapeHtml(it.title)} (${escapeHtml(it.subject)})</li>`).join("")}
                               </ul>
                               ${!isMe ? `
-                                <button type="button" class="btn-primary" style="margin-top:4px; padding:6px 11px; font-size:12px;" onclick="adoptSharedCalendar('${safeMsgId}')">
+                                <button type="button" class="btn-primary" style="margin-top:4px; padding:6px 11px; font-size:12px;" onclick="adoptSharedCalendar('${escapeJsSingle(m.id)}')">
                                   ➕ Alle Termine in meinen Kalender übernehmen
                                 </button>
                               ` : ""}
@@ -5163,25 +5367,19 @@
                 }
               </div>
 
-              <div style="display:flex; gap:8px; margin-bottom:10px;">
-                <input type="text"
-                       id="chatTextInput"
-                       class="input-field"
-                       style="margin:0;"
-                       placeholder="Nachricht an ${escapeHtml(activePartner.name)} schreiben..."
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+              <div style="display:flex; gap:8px; margin-bottom:12px;">
+                <input type="text" id="chatTextInput" class="input-field" style="margin:0;" placeholder="Nachricht an ${escapeHtml(activePartner.name)} schreiben..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
                 <button type="button" class="btn-primary" onclick="sendChatMessage()">Senden</button>
               </div>
 
-              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding-top:8px; border-top:1px solid var(--border);">
-                <span style="font-size:12.5px; font-weight:700; color:var(--text-muted);">Einzelnen Termin teilen:</span>
-                <select id="chatExamSelect" class="select-field" style="margin:0; width:auto; min-width:210px; padding:7px 10px; font-size:13px;">
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding-top:10px; border-top:1px solid var(--border);">
+                <select id="chatExamSelect" class="select-field" style="margin:0; flex:1; min-width:210px;">
                   ${myExams.length === 0
-                    ? `<option value="">Keine eigenen Termine vorhanden</option>`
-                    : myExams.map(ex => `<option value="${escapeHtml(ex.id)}">${escapeHtml(ex.date)} – ${escapeHtml(ex.title)}</option>`).join("")
+                    ? `<option value="">Keine eigenen Prüfungstermine vorhanden</option>`
+                    : myExams.map(ex => `<option value="${escapeHtml(ex.id)}">${escapeHtml(ex.date)} – ${escapeHtml(ex.title)} (${escapeHtml(ex.subject)})</option>`).join("")
                   }
                 </select>
-                <button type="button" class="btn-secondary" style="padding:7px 12px; font-size:12.5px;" onclick="shareExamInChat()">📅 Termin senden</button>
+                <button type="button" class="btn-secondary" onclick="shareExamInChat()">📅 Termin senden</button>
               </div>
             `}
           </div>
@@ -5189,342 +5387,639 @@
       `;
     }
 
-    function renderCalendarView() {
+    function renderView() {
+      if (!isAuthenticated || isLoginScreenVisible) return;
+      const container = document.getElementById("viewContainer");
+      const heading = document.getElementById("pageHeading");
+      const visible = getVisibleSubjects();
+
+      if (currentView === "home") {
+        heading.textContent = "🏠 Startseite";
+        container.innerHTML = renderHomeView(visible);
+      } else if (currentView === "library") {
+        heading.textContent = "📚 Meine Bibliothek";
+        container.innerHTML = renderMyLibraryView();
+      } else if (currentView === "folder-search") {
+        heading.textContent = "🔎 Ordner suchen";
+        container.innerHTML = renderFolderSearchView();
+      } else if (currentView === "chat") {
+        heading.textContent = "💬 Chat, Freunde & Kalender";
+        container.innerHTML = renderChatAndFriendsView();
+      } else if (currentView === "leaderboard") {
+        heading.textContent = "🏆 Leaderboard";
+        container.innerHTML = renderLeaderboardView();
+      } else if (currentView === "calendar") {
+        heading.textContent = "📅 Prüfungskalender";
+        container.innerHTML = renderCalendarView();
+      } else if (currentView === "custom-exam") {
+        heading.textContent = "🎓 Prüfung & Probeprüfung";
+        container.innerHTML = renderCustomExamView(visible);
+      } else if (currentView === "derivative-trainer") {
+        heading.textContent = "📈 Ableitungstrainer";
+        container.innerHTML = renderDerivativeTrainerView();
+      } else if (currentView === "vocab-trainer") {
+        heading.textContent = "🇬🇧 Vokabeltrainer";
+        container.innerHTML = renderVocabTrainerView();
+      } else if (currentView === "formulas") {
+        heading.textContent = "📐 Formelsammlung & Rechner";
+        container.innerHTML = renderFormulasView();
+        updateFormulaCalc();
+      } else if (currentView === "matura-textsorten") {
+        heading.textContent = "📝 Matura-Textsorten (Deutsch & Englisch)";
+        container.innerHTML = renderMaturaTextsortenView();
+      } else if (currentView === "contact") {
+        heading.textContent = "✉️ Kontakt & Support";
+        container.innerHTML = renderContactView();
+      } else if (currentView === "imprint") {
+        heading.textContent = "📄 Impressum";
+        container.innerHTML = renderImprintView();
+      } else if (currentView === "settings") {
+        heading.textContent = "⚙️ Einstellungen & Passwort";
+        container.innerHTML = renderSettingsView();
+      } else if (currentView === "admin") {
+        if (!isAdmin()) {
+          currentView = "home";
+          heading.textContent = "🏠 Startseite";
+          container.innerHTML = renderHomeView(visible);
+        } else {
+          heading.textContent = "🛡️ Admin – Benutzer, Rollen & Kurse";
+          container.innerHTML = renderAdminView();
+        }
+      } else if (currentView.startsWith("subject-")) {
+        const subId = currentView.replace("subject-", "");
+        const sub = visible.find(s => s.id === subId);
+        if (!sub) {
+          currentView = "home";
+          heading.textContent = "🏠 Startseite";
+          container.innerHTML = renderHomeView(visible);
+        } else {
+          heading.textContent = `${sub.icon} ${sub.name}`;
+          container.innerHTML = renderSubjectView(sub);
+        }
+      }
+
+      typesetMath(container);
+    }
+
+    function renderHomeView(visibleSubjects) {
       const myExams = getUserExams(currentUser.id);
-      const sorted = [...myExams].sort((a, b) => a.date.localeCompare(b.date));
-      const defaultDate = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
-      const draftSubject = calendarDraftForm.subject !== null ? calendarDraftForm.subject : "Fertigungstechnik";
-      const draftDate = calendarDraftForm.date !== null ? calendarDraftForm.date : defaultDate;
-      const draftTitle = calendarDraftForm.title || "";
-      const draftNotes = calendarDraftForm.notes || "";
+      const upcoming = myExams
+        .map(e => ({ ...e, diff: getDaysUntil(e.date) }))
+        .filter(e => e.diff >= 0 && e.diff <= 30)
+        .sort((a, b) => a.diff - b.diff);
+
+      const favorites = visibleSubjects.filter(s => s.favorite);
+      const incomingCount = getIncomingRequests(currentUser.id).length;
+      const libKeys = getUserLibraryKeys(currentUser.id);
+
+      const warningHtml = upcoming.length > 0 ? `
+        <div class="exam-warning-card">
+          <div class="exam-warning-top">
+            <div>
+              <strong>⚠️ Anstehende Prüfungen in den nächsten 30 Tagen (${upcoming.length})</strong>
+              <div style="margin-top:2px;">Dein persönlicher Prüfungskalender – rechtzeitig wiederholen!</div>
+            </div>
+            <span>${upcoming.length} Termin(e)</span>
+          </div>
+          ${upcoming.map(ex => `
+            <div class="exam-item-box">
+              <div>
+                <div style="font-weight:700; font-size:15px;">${escapeHtml(ex.title)}</div>
+                <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">
+                  Fach: <strong>${escapeHtml(ex.subject)}</strong> • Datum: ${escapeHtml(ex.date)}${ex.notes ? ` • ${escapeHtml(ex.notes)}` : ""}
+                </div>
+              </div>
+              <span class="days-badge">${formatDaysBadge(ex.diff)}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : "";
+
+      const favoritesHtml = `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h3 style="font-size:18px;">⭐ Meine Lieblingsfächer</h3>
+              <p style="font-size:13px; color:var(--text-muted); margin-top:2px;">
+                Schnellzugriff auf deine wichtigsten Fächer – klicke in der Seitenleiste auf ⭐, um Fächer hinzuzufügen oder zu entfernen.
+              </p>
+            </div>
+            <span class="count-pill">${favorites.length} Favoriten</span>
+          </div>
+
+          ${favorites.length === 0
+            ? `<p style="font-size:13.5px; color:var(--text-muted); margin-top:14px;">Noch keine Lieblingsfächer markiert. Klicke links in der Fächerliste auf das ⭐-Symbol.</p>`
+            : `<div class="fav-grid">
+                ${favorites.map(sub => {
+                  const safeSubId = escapeJsSingle(sub.id);
+                  const topColor = isSafeCssColor(sub.color) ? sub.color : "#2563eb";
+                  const visibleFolders = (Array.isArray(sub.folders) ? sub.folders : []).filter(f => canUserSeeFolder(f, currentUser));
+                  return `
+                    <div class="fav-card" style="border-top-color:${topColor};">
+                      <div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                          <span class="count-pill">${escapeHtml(sub.category)}</span>
+                          <span onclick="toggleFavoriteSubject('${safeSubId}', event)" title="Aus Favoriten entfernen" style="cursor:pointer; font-size:16px;">⭐</span>
+                        </div>
+                        <div style="font-size:24px; margin-bottom:6px;">${escapeHtml(sub.icon)}</div>
+                        <div style="font-weight:800; font-size:17px; margin-bottom:4px;">${escapeHtml(sub.name)}</div>
+                        <div style="font-size:12.5px; color:var(--text-muted);">${visibleFolders.length} Ordner verfügbar</div>
+                      </div>
+                      <button class="btn-primary" style="width:100%; justify-content:center;" onclick="navigate('subject-${safeSubId}')">
+                        Fach öffnen →
+                      </button>
+                    </div>
+                  `;
+                }).join("")}
+              </div>`
+          }
+        </div>
+      `;
 
       return `
         <div class="card">
-          <h3>➕ Neuen Prüfungstermin in deinem Kalender anlegen</h3>
-          <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:10px;">
-            Persönlicher Prüfungskalender für <strong>${escapeHtml(currentUser.name)}</strong> – du kannst Termine auch direkt im Chat mit Freunden teilen.
+          <h3 style="font-size:20px; margin-bottom:6px;">Willkommen zurück, ${escapeHtml(currentUser.name)}!</h3>
+          <p style="color:var(--text-muted); font-size:14px;">
+            Du bist als <strong>${escapeHtml(currentUser.role)}</strong> angemeldet · <strong>${currentUser.points} Punkte</strong> · <strong>${currentUser.streak || 0} Tage Streak 🔥</strong> · <strong>${libKeys.length} Ordner in Bibliothek</strong>.
+          </p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+            <button class="btn-primary" onclick="navigate('custom-exam')">🧪 Prüfung &amp; Probeprüfung</button>
+            <button class="btn-secondary" onclick="navigate('library')">📚 Meine Bibliothek</button>
+            <button class="btn-secondary" onclick="navigate('folder-search')">🔎 Ordner suchen</button>
+            <button class="btn-secondary" onclick="navigate('chat')">💬 Chat &amp; Freunde${incomingCount > 0 ? ` (${incomingCount} neu)` : ""}</button>
+            <button class="btn-secondary" onclick="navigate('leaderboard')">🏆 Leaderboard</button>
+            <button class="btn-secondary" onclick="navigate('derivative-trainer')">📈 Ableitungstrainer</button>
+            <button class="btn-secondary" onclick="navigate('vocab-trainer')">🇬🇧 Vokabeltrainer</button>
+            <button class="btn-secondary" onclick="navigate('calendar')">📅 Prüfungskalender</button>
+            <button class="btn-secondary" onclick="navigate('formulas')">📐 Formelsammlung</button>
+            <button class="btn-secondary" onclick="navigate('contact')">✉️ Kontakt</button>
+            <button class="btn-secondary" onclick="navigate('imprint')">📄 Impressum</button>
+          </div>
+        </div>
+        ${warningHtml}
+        ${favoritesHtml}
+      `;
+    }
+
+    function toggleFavoriteSubject(subId, event) {
+      if (event) event.stopPropagation();
+      const sub = subjects.find(s => s.id === subId);
+      if (!sub) return;
+      sub.favorite = !sub.favorite;
+      saveSubjects();
+      renderSidebar();
+      renderView();
+    }
+
+    function renderCalendarView() {
+      const myExams = getUserExams(currentUser.id);
+      const sorted = [...myExams].sort((a, b) => a.date.localeCompare(b.date));
+      const defaultSubject = calendarDraftForm.subject !== null ? calendarDraftForm.subject : "Fertigungstechnik";
+      const defaultDate = calendarDraftForm.date !== null ? calendarDraftForm.date : new Date().toISOString().split("T")[0];
+      const defaultTitle = calendarDraftForm.title || "";
+      const defaultNotes = calendarDraftForm.notes || "";
+
+      return `
+        <div class="card">
+          <h3 style="margin-bottom:4px;">➕ Neuen Prüfungstermin eintragen</h3>
+          <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">
+            Dein persönlicher Kalender (für <strong>${escapeHtml(currentUser.name)}</strong>). Termine kannst du im Chat mit Freunden teilen.
           </p>
           <div class="form-grid-2">
             <div>
               <label style="font-size:13px; font-weight:600;">Fach</label>
-              <input type="text" id="newExamSubject" class="input-field" value="${escapeHtml(draftSubject)}" oninput="calendarDraftForm.subject = this.value;">
+              <input type="text" id="newExamSubject" class="input-field" value="${escapeHtml(defaultSubject)}" oninput="calendarDraftForm.subject = this.value;">
             </div>
             <div>
               <label style="font-size:13px; font-weight:600;">Datum</label>
-              <input type="date" id="newExamDate" class="input-field" value="${escapeHtml(draftDate)}" oninput="calendarDraftForm.date = this.value;">
+              <input type="date" id="newExamDate" class="input-field" value="${escapeHtml(defaultDate)}" oninput="calendarDraftForm.date = this.value;">
             </div>
           </div>
-          <label style="font-size:13px; font-weight:600;">Titel der Prüfung / Abgabe</label>
-          <input type="text" id="newExamTitle" class="input-field" value="${escapeHtml(draftTitle)}" placeholder="z. B. Mathe Schularbeit oder FET Test" oninput="calendarDraftForm.title = this.value;">
+          <label style="font-size:13px; font-weight:600;">Prüfungstitel / Thema</label>
+          <input type="text" id="newExamTitle" class="input-field" value="${escapeHtml(defaultTitle)}" placeholder="z. B. Mechanik Test 2" oninput="calendarDraftForm.title = this.value;">
           <label style="font-size:13px; font-weight:600;">Notizen / Lernstoff (optional)</label>
-          <input type="text" id="newExamNotes" class="input-field" value="${escapeHtml(draftNotes)}" placeholder="z. B. Kapitel 1–4, Formelsammlung erlaubt" oninput="calendarDraftForm.notes = this.value;">
+          <input type="text" id="newExamNotes" class="input-field" value="${escapeHtml(defaultNotes)}" placeholder="z. B. Kapitel 4–6" oninput="calendarDraftForm.notes = this.value;">
           <button class="btn-primary" onclick="addExam()">Termin speichern</button>
         </div>
+
         <div class="card">
-          <h3>📅 Deine eingetragenen Termine (${sorted.length})</h3>
-          ${sorted.length === 0 ? `<p style="color:var(--text-muted); font-size:14px; margin-top:10px;">Noch keine Termine eingetragen.</p>` : sorted.map(ex => {
-            const diff = getDaysUntil(ex.date);
-            return `
-              <div class="exam-item-box" style="margin-top:10px;">
-                <div>
-                  <span class="count-pill">${escapeHtml(ex.subject)}</span>
-                  <div style="font-weight:700; font-size:15px; margin-top:4px;">${escapeHtml(ex.title)}</div>
-                  <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(ex.date)}${ex.notes ? " • " + escapeHtml(ex.notes) : ""}</div>
-                </div>
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="days-badge">${escapeHtml(formatDaysBadge(diff))}</span>
-                  <button class="btn-danger" onclick="deleteExam('${escapeJsSingle(ex.id)}')">Löschen</button>
-                </div>
-              </div>
-            `;
-          }).join("")}
+          <h3 style="margin-bottom:12px;">🗓️ Meine Prüfungstermine (${sorted.length})</h3>
+          ${sorted.length === 0
+            ? `<p style="color:var(--text-muted); font-size:14px;">Noch keine Prüfungstermine eingetragen.</p>`
+            : sorted.map(ex => {
+                const diff = getDaysUntil(ex.date);
+                return `
+                  <div class="exam-item-box">
+                    <div>
+                      <div style="font-weight:700; font-size:15px;">${escapeHtml(ex.title)}</div>
+                      <div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">
+                        Fach: <strong>${escapeHtml(ex.subject)}</strong> • Datum: ${escapeHtml(ex.date)}${ex.notes ? ` • ${escapeHtml(ex.notes)}` : ""}
+                      </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span class="days-badge">${formatDaysBadge(diff)}</span>
+                      <button class="btn-danger" onclick="deleteExam('${escapeJsSingle(ex.id)}')">Löschen</button>
+                    </div>
+                  </div>
+                `;
+              }).join("")
+          }
         </div>
       `;
     }
 
     function renderSubjectView(sub) {
       const visibleFolders = (Array.isArray(sub.folders) ? sub.folders : []).filter(f => canUserSeeFolder(f, currentUser));
-
-      if (activeFolderId && !visibleFolders.some(f => f.id === activeFolderId)) {
-        activeFolderId = null;
-      }
-
-      if (!activeFolderId) {
-        return `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-              <div>
-                <h3>Ordner in ${escapeHtml(sub.name)}</h3>
-                <p style="font-size:13px; color:var(--text-muted);">Wähle einen Ordner zum Lernen oder füge ihn zu deiner persönlichen Bibliothek hinzu.</p>
-              </div>
-              <button type="button" class="btn-secondary" onclick="navigate('folder-search')">🔎 Alle Ordner suchen</button>
-            </div>
-
-            <div class="form-grid-2" style="margin-bottom:14px; align-items:end;">
-              <input type="text" id="newFolderName" class="input-field" style="margin:0;" placeholder="Neuer Ordnername (z. B. Integralrechnung)..." onkeydown="if(event.key==='Enter'){event.preventDefault();createFolder('${escapeJsSingle(sub.id)}');}">
-              <select id="newFolderVisibility" class="select-field" style="margin:0;">
-                <option value="public">🌍 Öffentlich (alle Mitglieder)</option>
-                <option value="friends">👥 Nur Freunde</option>
-                <option value="private">🔒 Privat (nur ich)</option>
-              </select>
-            </div>
-            <button class="btn-primary" style="margin-bottom:16px;" onclick="createFolder('${escapeJsSingle(sub.id)}')">+ Ordner erstellen</button>
-
-            ${visibleFolders.length === 0
-              ? `<p style="font-size:13.5px; color:var(--text-muted);">In diesem Fach sind aktuell keine für dich sichtbaren Ordner vorhanden.</p>`
-              : visibleFolders.map(f => {
-                  const vis = normalizeVisibility(f.visibility);
-                  const vMeta = getVisibilityMeta(vis);
-                  const inLib = isFolderInLibrary(sub.id, f.id, currentUser.id);
-                  const ownerId = f.ownerId ? Number(f.ownerId) : 1;
-                  const canEditVis = Number(currentUser.id) === ownerId || isAdmin();
-                  const safeSubId = escapeJsSingle(sub.id);
-                  const safeFolderId = escapeJsSingle(f.id);
-
-                  return `
-                    <div class="library-folder-card">
-                      <div>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
-                          <span class="visibility-pill ${vMeta.pillClass}">${escapeHtml(vMeta.label)}</span>
-                          <span class="count-pill">${(f.questions || []).length} Fragen</span>
-                        </div>
-                        <div style="font-weight:800; font-size:15.5px;">📁 ${escapeHtml(f.name)}</div>
-                      </div>
-                      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                        ${canEditVis ? `
-                          <select class="select-field" style="margin:0; width:auto; padding:6px 10px; font-size:12px;" onchange="changeFolderVisibility('${safeSubId}', '${safeFolderId}', this.value)">
-                            <option value="public" ${vis === "public" ? "selected" : ""}>🌍 Öffentlich</option>
-                            <option value="friends" ${vis === "friends" ? "selected" : ""}>👥 Nur Freunde</option>
-                            <option value="private" ${vis === "private" ? "selected" : ""}>🔒 Privat</option>
-                          </select>
-                        ` : ""}
-                        <button type="button"
-                                class="${inLib ? 'btn-secondary' : 'btn-secondary'}"
-                                style="${inLib ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
-                                onclick="toggleFolderInLibrary('${safeSubId}', '${safeFolderId}')">
-                          ${inLib ? '✓ In Bibliothek' : '+ Bibliothek'}
-                        </button>
-                        <button type="button" class="btn-primary" onclick="openFolder('${safeSubId}', '${safeFolderId}')">
-                          Öffnen →
-                        </button>
-                      </div>
-                    </div>
-                  `;
-                }).join("")
-            }
-          </div>
-        `;
-      }
-
-      const folder = visibleFolders.find(f => f.id === activeFolderId);
-      if (!folder) {
-        activeFolderId = null;
-        return renderSubjectView(sub);
-      }
-
-      const allFolderQuestions = Array.isArray(folder.questions) ? folder.questions : [];
-      const activeQuestions = allFolderQuestions.filter(q => !isQuestionArchived(sub.id, folder.id, q.id));
-      const archivedQuestions = allFolderQuestions.filter(q => isQuestionArchived(sub.id, folder.id, q.id));
-      const displayedQuestions = showArchivedMastered ? archivedQuestions : activeQuestions;
-
+      if (!activeFolderId && visibleFolders.length > 0) activeFolderId = visibleFolders[0].id;
+      const folder = visibleFolders.find(f => f.id === activeFolderId) || visibleFolders[0] || null;
       const safeSubId = escapeJsSingle(sub.id);
-      const safeFolderId = escapeJsSingle(folder.id);
-      const vis = normalizeVisibility(folder.visibility);
-      const vMeta = getVisibilityMeta(vis);
-      const inLib = isFolderInLibrary(sub.id, folder.id, currentUser.id);
-      const ownerId = folder.ownerId ? Number(folder.ownerId) : 1;
-      const canEditVis = Number(currentUser.id) === ownerId || isAdmin();
+
+      const allFolderQs = folder && Array.isArray(folder.questions) ? folder.questions : [];
+      const activeQs = allFolderQs.filter(q => !isQuestionArchived(sub.id, folder.id, q.id));
+      const archivedQs = allFolderQs.filter(q => isQuestionArchived(sub.id, folder.id, q.id));
+      const displayedQs = showArchivedMastered ? archivedQs : activeQs;
+
+      const folderVis = folder ? normalizeVisibility(folder.visibility) : "public";
+      const folderVisMeta = getVisibilityMeta(folderVis);
+      const folderOwnerId = folder ? (folder.ownerId ? Number(folder.ownerId) : 1) : 1;
+      const canEditFolderVis = folder && (Number(currentUser.id) === folderOwnerId || isAdmin());
+      const inLibrary = folder ? isFolderInLibrary(sub.id, folder.id, currentUser.id) : false;
 
       return `
         <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
-            <button class="btn-secondary" onclick="activeFolderId=null; showArchivedMastered=false; revealedFlashcards.clear(); renderView();">← Zurück zu den Ordnern</button>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <span class="visibility-pill ${vMeta.pillClass}">${escapeHtml(vMeta.label)}</span>
-              ${canEditVis ? `
-                <select class="select-field" style="margin:0; width:auto; padding:6px 10px; font-size:12px;" onchange="changeFolderVisibility('${safeSubId}', '${safeFolderId}', this.value)">
-                  <option value="public" ${vis === "public" ? "selected" : ""}>🌍 Öffentlich</option>
-                  <option value="friends" ${vis === "friends" ? "selected" : ""}>👥 Nur Freunde</option>
-                  <option value="private" ${vis === "private" ? "selected" : ""}>🔒 Privat</option>
-                </select>
-              ` : ""}
-              <button type="button"
-                      class="${inLib ? 'btn-secondary' : 'btn-primary'}"
-                      style="padding:7px 12px; font-size:12.5px;"
-                      onclick="toggleFolderInLibrary('${safeSubId}', '${safeFolderId}')">
-                ${inLib ? '✓ In meiner Bibliothek' : '+ In Bibliothek speichern'}
-              </button>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+            <div>
+              <span class="count-pill">${escapeHtml(sub.category)}</span>
+              <h3 style="font-size:20px; margin-top:6px;">${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</h3>
             </div>
-          </div>
-
-          <h3 style="margin-bottom:10px;">📁 ${escapeHtml(folder.name)}</h3>
-
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button type="button"
-                      class="btn-secondary"
-                      style="${folderPracticeMode === 'questions' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
-                      onclick="folderPracticeMode='questions'; renderView();">
-                📝 Fragen (${showArchivedMastered ? archivedQuestions.length : activeQuestions.length})
-              </button>
-              <button type="button"
-                      class="btn-secondary"
-                      style="${folderPracticeMode === 'flashcards' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
-                      onclick="folderPracticeMode='flashcards'; renderView();">
-                🃏 Karteikarten (${showArchivedMastered ? archivedQuestions.length : activeQuestions.length})
-              </button>
-            </div>
-
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <span class="mastered-badge">Abgelegt: ${archivedQuestions.length} / ${allFolderQuestions.length}</span>
-              <button type="button"
-                      class="filter-btn ${showArchivedMastered ? 'active' : ''}"
-                      onclick="showArchivedMastered = !showArchivedMastered; revealedFlashcards.clear(); renderView();">
-                ${showArchivedMastered ? `📂 Aktive anzeigen (${activeQuestions.length})` : `🗄️ Abgelegte anzeigen (${archivedQuestions.length})`}
-              </button>
+              ${folder ? `
+                <button type="button"
+                        class="${inLibrary ? 'btn-secondary' : 'btn-primary'}"
+                        onclick="toggleFolderInLibrary('${safeSubId}', '${escapeJsSingle(folder.id)}')">
+                  ${inLibrary ? '✓ In Bibliothek' : '+ In Bibliothek'}
+                </button>
+              ` : ""}
+              ${isAdmin() ? `
+                <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:190px;" placeholder="Neuer Ordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createFolderInSubject('${safeSubId}');}">
+                <button class="btn-secondary" onclick="createFolderInSubject('${safeSubId}')">+ Ordner</button>
+              ` : ""}
             </div>
           </div>
 
-          ${displayedQuestions.length === 0
-            ? `<p style="color:var(--text-muted); font-size:14px;">
-                ${showArchivedMastered
-                  ? "Noch keine Fragen in diesem Ordner abgelegt (jede Frage wird nach 3× richtiger Beantwortung automatisch abgelegt)."
-                  : allFolderQuestions.length > 0
-                    ? "Alle Fragen in diesem Ordner wurden bereits 3× richtig gemeistert und abgelegt! Klicke oben auf „🗄️ Abgelegte anzeigen“, um sie bei Bedarf erneut zu üben."
-                    : "Noch keine Fragen in diesem Ordner."}
-               </p>`
-            : displayedQuestions.map((q, i) => {
-                const count = getQuestionCorrectCount(sub.id, folder.id, q.id);
-                const safeQId = escapeJsSingle(q.id);
+          <div class="tab-strip">
+            ${visibleFolders.map(f => `
+              <button class="btn-secondary" style="${folder && f.id === folder.id ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
+                      onclick="activeFolderId='${escapeJsSingle(f.id)}'; showArchivedMastered=false; revealedFlashcards.clear(); renderView();">
+                📁 ${escapeHtml(f.name)} (${(f.questions || []).length})
+              </button>
+            `).join("")}
+          </div>
 
-                if (folderPracticeMode === "flashcards") {
-                  const card = buildFlashcardForQuestion(q);
-                  const isRevealed = revealedFlashcards.has(q.id);
-                  return `
-                    <div class="flashcard-box">
-                      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-                        <span class="flashcard-side-label">Karteikarte ${i + 1} · ${count}/${MASTERY_THRESHOLD}× richtig</span>
-                        ${showArchivedMastered
-                          ? `<button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">↩️ Wieder aktivieren</button>`
-                          : `<button type="button" class="btn-danger" onclick="deleteQuestion('${safeSubId}', '${safeFolderId}', '${safeQId}')">Löschen</button>`
-                        }
-                      </div>
-                      <div style="font-weight:800; font-size:15.5px;">${escapeHtml(card.front)}</div>
+          ${!folder ? `
+            <p style="font-size:14px; color:var(--text-muted);">Keine sichtbaren Ordner in diesem Fach vorhanden.</p>
+          ` : `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px; padding:10px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:12px;">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span class="visibility-pill ${folderVisMeta.pillClass}">${escapeHtml(folderVisMeta.label)}</span>
+                <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(folderVisMeta.desc)}</span>
+              </div>
+              ${canEditFolderVis ? `
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                  <label style="font-size:12px; font-weight:700;">Sichtbarkeit:</label>
+                  <select class="select-field" style="margin:0; padding:5px 10px; width:auto; font-size:12.5px;"
+                          onchange="changeFolderVisibility('${safeSubId}', '${escapeJsSingle(folder.id)}', this.value)">
+                    <option value="public" ${folderVis === "public" ? "selected" : ""}>🌍 Öffentlich</option>
+                    <option value="friends" ${folderVis === "friends" ? "selected" : ""}>👥 Nur Freunde</option>
+                    <option value="private" ${folderVis === "private" ? "selected" : ""}>🔒 Privat</option>
+                  </select>
+                </div>
+              ` : ""}
+            </div>
 
-                      ${isRevealed ? `
-                        <div class="flashcard-answer-panel">
-                          <div class="flashcard-side-label" style="color:#10b981;">Lösung &amp; Erklärung</div>
-                          <div style="font-size:14px; line-height:1.45;">${escapeHtml(card.back)}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn-secondary" style="${folderPracticeMode === 'questions' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="folderPracticeMode='questions'; renderView();">
+                  ✍️ Fragen üben (${allFolderQs.length})
+                </button>
+                <button type="button" class="btn-secondary" style="${folderPracticeMode === 'flashcards' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="folderPracticeMode='flashcards'; renderView();">
+                  🃏 Karteikarten (${allFolderQs.length})
+                </button>
+              </div>
+
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="filter-btn ${!showArchivedMastered ? 'active' : ''}" onclick="showArchivedMastered=false; renderView();">
+                  Aktiv (${activeQs.length})
+                </button>
+                <button type="button" class="filter-btn ${showArchivedMastered ? 'active' : ''}" onclick="showArchivedMastered=true; renderView();">
+                  Abgelegt / Gemeistert (${archivedQs.length})
+                </button>
+              </div>
+            </div>
+
+            ${folderPracticeMode === 'flashcards' ? `
+              ${displayedQs.length === 0
+                ? `<p style="color:var(--text-muted); font-size:14px;">${showArchivedMastered ? "Noch keine Karteikarten abgelegt (3× richtig = abgelegt)." : "Alle Karteikarten in diesem Ordner wurden bereits 3× richtig gelernt und abgelegt!"}</p>`
+                : displayedQs.map((q, idx) => {
+                    const cardData = buildFlashcardForQuestion(q);
+                    const isRev = revealedFlashcards.has(q.id);
+                    const count = getQuestionCorrectCount(sub.id, folder.id, q.id);
+                    const safeQId = escapeJsSingle(q.id);
+                    const safeFolderId = escapeJsSingle(folder.id);
+                    return `
+                      <div class="flashcard-box">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
+                          <span class="flashcard-side-label">Karteikarte ${idx + 1} · Vorderseite</span>
+                          <span class="count-pill">${count} / ${MASTERY_THRESHOLD}× richtig</span>
                         </div>
-                      ` : ""}
+                        <div style="font-weight:700; font-size:15.5px;">${escapeHtml(cardData.front)}</div>
 
-                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
-                        <button type="button" class="btn-secondary" onclick="toggleFlashcardReveal('${safeQId}')">
-                          ${isRevealed ? "🙈 Antwort verbergen" : "👁️ Antwort umdrehen"}
-                        </button>
-                        ${!showArchivedMastered ? `
+                        ${isRev ? `
+                          <div class="flashcard-answer-panel">
+                            <div class="flashcard-side-label" style="color:#10b981;">Rückseite / Lösung</div>
+                            <div style="font-size:14.5px; line-height:1.5;">${escapeHtml(cardData.back)}</div>
+                          </div>
+                        ` : ""}
+
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+                          <button type="button" class="btn-secondary" onclick="toggleFlashcardReveal('${safeQId}')">
+                            ${isRev ? "🙈 Lösung verbergen" : "👁️ Lösung umdrehen"}
+                          </button>
                           <button type="button" class="btn-primary" onclick="rateFlashcard('${safeSubId}', '${safeFolderId}', '${safeQId}', true)">
-                            ✅ Gewusst (${count + 1}/${MASTERY_THRESHOLD} · +10 Pkt)
+                            ✅ Richtig gelernt (+10 Pkt)
                           </button>
                           <button type="button" class="btn-secondary" onclick="rateFlashcard('${safeSubId}', '${safeFolderId}', '${safeQId}', false)">
-                            ❌ Noch unsicher
+                            ❌ Noch üben
                           </button>
-                        ` : ""}
+                          ${showArchivedMastered ? `
+                            <button type="button" class="btn-secondary" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">
+                              ↩️ Zurück in aktive Karten
+                            </button>
+                          ` : ""}
+                        </div>
                       </div>
-                    </div>
-                  `;
-                }
+                    `;
+                  }).join("")
+              }
+            ` : `
+              ${displayedQs.length === 0
+                ? `<p style="color:var(--text-muted); font-size:14px;">${showArchivedMastered ? "Noch keine Fragen abgelegt (3× richtig = abgelegt)." : "Alle Fragen in diesem Ordner wurden bereits 3× richtig beantwortet und abgelegt!"}</p>`
+                : displayedQs.map((q, idx) => {
+                    const count = getQuestionCorrectCount(sub.id, folder.id, q.id);
+                    const safeQId = escapeJsSingle(q.id);
+                    const safeFolderId = escapeJsSingle(folder.id);
+                    const safeExpl = escapeJsSingle(q.explanation);
+                    return `
+                      <div class="question-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+                          <span class="${count >= MASTERY_THRESHOLD ? 'mastered-badge' : 'count-pill'}">${count} / ${MASTERY_THRESHOLD}× richtig</span>
+                          <div style="display:flex; gap:6px;">
+                            ${showArchivedMastered ? `
+                              <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">
+                                ↩️ Wieder aktivieren
+                              </button>
+                            ` : ""}
+                            ${isAdmin() ? `<button class="btn-danger" onclick="deleteQuestion('${safeSubId}', '${safeFolderId}', '${safeQId}')">Löschen</button>` : ""}
+                          </div>
+                        </div>
+                        <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
+                        ${q.type === "mc" ? `
+                          <div style="margin-top:8px;">
+                            ${q.options.map(opt => `
+                              <div class="mc-option" onclick="checkMcAnswer('${safeSubId}', '${safeFolderId}', '${safeQId}', '${escapeJsSingle(opt)}', '${escapeJsSingle(q.correct)}', '${safeExpl}')">
+                                <span>🔘</span> <span>${escapeHtml(opt)}</span>
+                              </div>
+                            `).join("")}
+                          </div>
+                        ` : `
+                          <div style="display:flex; gap:8px; margin-top:10px;">
+                            <input type="text" id="ans-${escapeHtml(q.id)}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
+                            <button class="btn-primary" onclick="checkCalcAnswer('${safeSubId}', '${safeFolderId}', '${safeQId}', '${escapeJsSingle(q.answer)}', '${safeExpl}')">Prüfen</button>
+                          </div>
+                        `}
+                        <div id="fb-${escapeHtml(q.id)}"></div>
+                      </div>
+                    `;
+                  }).join("")
+              }
+            `}
 
-                const safeExpl = escapeJsSingle(q.explanation || "Keine Erklärung hinterlegt.");
-                if (q.type === "mc") {
-                  const safeCorr = escapeJsSingle(q.correct);
-                  return `
-                    <div class="question-card">
-                      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-                        <span class="count-pill">${count} / ${MASTERY_THRESHOLD}× richtig</span>
-                        ${showArchivedMastered
-                          ? `<button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">↩️ Wieder aktivieren</button>`
-                          : `<button type="button" class="btn-danger" onclick="deleteQuestion('${safeSubId}', '${safeFolderId}', '${safeQId}')">Löschen</button>`
-                        }
-                      </div>
-                      <div style="font-weight:700; font-size:15px;">${i + 1}. ${escapeHtml(q.question)}</div>
-                      ${q.options.map(opt => `<div class="mc-option" onclick="checkMcAnswer('${safeSubId}', '${safeFolderId}', '${safeQId}', '${escapeJsSingle(opt)}', '${safeCorr}', '${safeExpl}')"><span>🔘</span> <span>${escapeHtml(opt)}</span></div>`).join("")}
-                      <div id="fb-${escapeHtml(q.id)}"></div>
-                    </div>
-                  `;
-                } else {
-                  const safeAns = escapeJsSingle(q.answer);
-                  return `
-                    <div class="question-card">
-                      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-                        <span class="count-pill">${count} / ${MASTERY_THRESHOLD}× richtig</span>
-                        ${showArchivedMastered
-                          ? `<button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">↩️ Wieder aktivieren</button>`
-                          : `<button type="button" class="btn-danger" onclick="deleteQuestion('${safeSubId}', '${safeFolderId}', '${safeQId}')">Löschen</button>`
-                        }
-                      </div>
-                      <div style="font-weight:700; font-size:15px;">${i + 1}. ${escapeHtml(q.question)}</div>
-                      <div style="display:flex; gap:8px; margin-top:10px;">
-                        <input type="text" id="ans-${escapeHtml(q.id)}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
-                        <button class="btn-primary" onclick="checkCalcAnswer('${safeSubId}', '${safeFolderId}', '${safeQId}', '${safeAns}', '${safeExpl}')">Prüfen</button>
-                      </div>
-                      <div id="fb-${escapeHtml(q.id)}"></div>
-                    </div>
-                  `;
-                }
-              })
-          }
+            ${isAdmin() ? `
+              <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+                <h4 style="margin-bottom:10px;">➕ Neue Frage in „${escapeHtml(folder.name)}“ anlegen</h4>
+                <div class="form-grid-2">
+                  <div>
+                    <label style="font-size:12px; font-weight:600;">Fragetyp</label>
+                    <select id="newQType" class="select-field" onchange="toggleNewQFields()">
+                      <option value="mc">Multiple-Choice</option>
+                      <option value="calc">Rechen- / Kurzantwort</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:12px; font-weight:600;">Fragetext</label>
+                    <input type="text" id="newQText" class="input-field" placeholder="Frage formulieren...">
+                  </div>
+                </div>
+                <div id="mcFields">
+                  <div class="form-grid-2">
+                    <input type="text" id="mcOpt1" class="input-field" placeholder="Option 1">
+                    <input type="text" id="mcOpt2" class="input-field" placeholder="Option 2">
+                    <input type="text" id="mcOpt3" class="input-field" placeholder="Option 3">
+                    <input type="text" id="mcOpt4" class="input-field" placeholder="Option 4">
+                  </div>
+                  <label style="font-size:12px; font-weight:600;">Richtige Option (exakt wie oben)</label>
+                  <input type="text" id="mcCorrect" class="input-field" placeholder="Richtige Antwort...">
+                </div>
+                <div id="calcFields" style="display:none;">
+                  <label style="font-size:12px; font-weight:600;">Erwartete Antwort (Zahl oder Text)</label>
+                  <input type="text" id="calcAnswer" class="input-field" placeholder="z. B. 42">
+                </div>
+                <label style="font-size:12px; font-weight:600;">Erklärung / Lösungsweg</label>
+                <input type="text" id="newQExpl" class="input-field" placeholder="Kurze Erklärung...">
+                <button class="btn-primary" onclick="addQuestionToFolder('${safeSubId}', '${escapeJsSingle(folder.id)}')">Frage speichern</button>
+              </div>
 
-          ${isAdmin() ? `
-            <div class="ai-code-box">
-              <strong style="font-size:14px;">🤖 Fragen-Code hier einfügen (Admin)</strong>
-              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Füge ein JSON-Objekt oder JSON-Array mit Fragen ein (optional inkl. <code>flashcard: { front, back }</code>):</div>
-              <textarea id="questionCodeInput" class="code-textarea" placeholder='[{"type":"mc","question":"Frage?","options":["A","B","C","D"],"correct":"A","explanation":"Begründung.","flashcard":{"front":"Vorderseite","back":"Rückseite"}}]'></textarea>
-              <button class="btn-primary" onclick="importQuestionCode('${safeSubId}', '${safeFolderId}')">📥 Fragen-Code übernehmen</button>
-              <div id="questionImportFeedback"></div>
-            </div>
-          ` : ""}
+              <div class="ai-code-box">
+                <strong style="font-size:14px;">🤖 KI-Fragen-Import (JSON / Code einfügen)</strong>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                  Füge hier ein JSON-Array mit Fragen ein (z. B. generiert von einer KI) und importiere sie direkt in „${escapeHtml(folder.name)}“:
+                </div>
+                <textarea id="aiQuestionsJsonInput" class="code-textarea" placeholder='[{"type":"mc","question":"Was ist 2 + 2?","options":["3","4","5","6"],"correct":"4","explanation":"2 + 2 = 4."}]'></textarea>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button type="button" class="btn-primary" onclick="importAiQuestions('${safeSubId}', '${escapeJsSingle(folder.id)}')">📥 Fragen importieren</button>
+                  <button type="button" class="btn-secondary" onclick="insertAiPromptTemplate()">📋 KI-Prompt-Vorlage einfügen</button>
+                </div>
+              </div>
+            ` : ""}
+          `}
         </div>
       `;
     }
 
-    function openFolder(subId, folderId) {
-      activeFolderId = folderId;
-      folderPracticeMode = "questions";
-      showArchivedMastered = false;
-      revealedFlashcards.clear();
-      renderView();
-    }
-
-    function createFolder(subId) {
-      const nameInput = document.getElementById("newFolderName");
-      const visSelect = document.getElementById("newFolderVisibility");
-      const name = nameInput ? nameInput.value.trim() : "";
-      if (!name) return alert("Bitte einen Ordnernamen eingeben.");
+    function createFolderInSubject(subId) {
+      if (!isAdmin()) return alert("Nur Admins dürfen Ordner anlegen.");
+      const input = document.getElementById("newFolderNameInput");
+      const name = input ? input.value.trim() : "";
+      if (!name) return alert("Bitte einen Ordnernamen eingeben!");
       const sub = subjects.find(s => s.id === subId);
       if (!sub) return;
-      const chosenVis = normalizeVisibility(visSelect ? visSelect.value : "public");
-      const newFolderId = "f-" + Date.now();
-      sub.folders.push({
-        id: newFolderId,
+      const newFolder = {
+        id: "f-" + Date.now(),
         name,
-        visibility: chosenVis,
+        visibility: "public",
         ownerId: Number(currentUser.id),
         questions: []
-      });
+      };
+      sub.folders.push(newFolder);
+      activeFolderId = newFolder.id;
       saveSubjects();
       renderSidebar();
       renderView();
     }
 
+    function toggleNewQFields() {
+      const t = document.getElementById("newQType").value;
+      document.getElementById("mcFields").style.display = t === "mc" ? "block" : "none";
+      document.getElementById("calcFields").style.display = t === "calc" ? "block" : "none";
+    }
+
+    function addQuestionToFolder(subId, folderId) {
+      if (!isAdmin()) return;
+      const sub = subjects.find(s => s.id === subId);
+      const folder = sub?.folders.find(f => f.id === folderId);
+      if (!folder) return;
+
+      const type = document.getElementById("newQType").value;
+      const question = document.getElementById("newQText").value.trim();
+      const explanation = document.getElementById("newQExpl").value.trim() || "Keine Erklärung hinterlegt.";
+      if (!question) return alert("Bitte einen Fragetext eingeben!");
+
+      if (type === "mc") {
+        const options = [
+          document.getElementById("mcOpt1").value.trim(),
+          document.getElementById("mcOpt2").value.trim(),
+          document.getElementById("mcOpt3").value.trim(),
+          document.getElementById("mcOpt4").value.trim()
+        ].filter(Boolean);
+        const correct = document.getElementById("mcCorrect").value.trim();
+        if (options.length < 2 || !correct) return alert("Bitte mindestens 2 Optionen und die richtige Antwort angeben!");
+        folder.questions.push({ id: "q-" + Date.now(), type: "mc", question, options, correct, explanation });
+      } else {
+        const answer = document.getElementById("calcAnswer").value.trim();
+        if (!answer) return alert("Bitte eine erwartete Antwort angeben!");
+        folder.questions.push({ id: "q-" + Date.now(), type: "calc", question, answer, explanation });
+      }
+
+      saveSubjects();
+      renderView();
+    }
+
+    function insertAiPromptTemplate() {
+      const ta = document.getElementById("aiQuestionsJsonInput");
+      if (!ta) return;
+      ta.value = JSON.stringify([
+        {
+          type: "mc",
+          question: "Beispiel-Frage: Welche Einheit hat die elektrische Spannung?",
+          options: ["Ampere", "Volt", "Ohm", "Watt"],
+          correct: "Volt",
+          explanation: "Die elektrische Spannung wird in Volt (V) gemessen."
+        },
+        {
+          type: "calc",
+          question: "Berechne 12 * 8.",
+          answer: "96",
+          explanation: "12 * 8 = 96."
+        }
+      ], null, 2);
+    }
+
+    function importAiQuestions(subId, folderId) {
+      if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
+      const sub = subjects.find(s => s.id === subId);
+      const folder = sub?.folders.find(f => f.id === folderId);
+      if (!folder) return;
+
+      const ta = document.getElementById("aiQuestionsJsonInput");
+      const raw = ta ? ta.value.trim() : "";
+      if (!raw) return alert("Bitte zuerst JSON-Code in das Textfeld einfügen!");
+
+      let parsed;
+      try {
+        const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        return alert("Ungültiges JSON-Format: " + e.message);
+      }
+
+      const items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.questions) ? parsed.questions : null);
+      if (!items || items.length === 0) {
+        return alert("Es wurde kein gültiges Fragen-Array gefunden.");
+      }
+
+      let addedCount = 0;
+      items.forEach((item, idx) => {
+        if (!item || !item.question) return;
+        const qId = "q-ai-" + Date.now() + "-" + idx;
+        const explanation = String(item.explanation || "Keine Erklärung hinterlegt.");
+
+        if (item.type === "calc" || (!Array.isArray(item.options) && item.answer !== undefined)) {
+          const ans = String(item.answer ?? "").trim();
+          if (!ans) return;
+          folder.questions.push({
+            id: qId,
+            type: "calc",
+            question: String(item.question).trim(),
+            answer: ans,
+            explanation
+          });
+          addedCount++;
+        } else {
+          const opts = Array.isArray(item.options) ? item.options.map(o => String(o).trim()).filter(Boolean) : [];
+          const corr = String(item.correct ?? opts[0] ?? "").trim();
+          if (opts.length < 2 || !corr) return;
+          folder.questions.push({
+            id: qId,
+            type: "mc",
+            question: String(item.question).trim(),
+            options: opts,
+            correct: corr,
+            explanation
+          });
+          addedCount++;
+        }
+      });
+
+      if (addedCount === 0) {
+        return alert("Keine gültigen Fragen im JSON gefunden.");
+      }
+
+      saveSubjects();
+      renderView();
+      alert(`✅ ${addedCount} Frage(n) erfolgreich importiert!`);
+    }
+
+    function deleteQuestion(subId, folderId, qId) {
+      if (!isAdmin()) return;
+      const sub = subjects.find(s => s.id === subId);
+      const folder = sub?.folders.find(f => f.id === folderId);
+      if (!folder) return;
+      folder.questions = folder.questions.filter(q => q.id !== qId);
+      delete questionCorrectCounts[getQuestionKey(subId, folderId, qId)];
+      saveQuestionCorrectCounts();
+      saveSubjects();
+      renderView();
+    }
+
     function checkMcAnswer(subId, folderId, qId, chosen, correct, explanation) {
       const fb = document.getElementById("fb-" + qId);
+      if (!fb) return;
       if (chosen === correct) {
         const count = incrementQuestionCorrectCount(subId, folderId, qId);
         const res = recordLearningActivity(10);
         const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
-        const archivedMsg = count >= MASTERY_THRESHOLD ? ` · 🗄️ ${MASTERY_THRESHOLD}/${MASTERY_THRESHOLD}× richtig → Frage abgelegt!` : ` · ${count}/${MASTERY_THRESHOLD}× richtig`;
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${escapeHtml(streakMsg)}${escapeHtml(archivedMsg)}) – ${escapeHtml(explanation)}</div>`;
+        const archMsg = count >= MASTERY_THRESHOLD ? ` · 🌟 ${count}/${MASTERY_THRESHOLD}× richtig (abgelegt!)` : ` · ${count}/${MASTERY_THRESHOLD}× richtig`;
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${escapeHtml(streakMsg)}${escapeHtml(archMsg)}) – ${escapeHtml(explanation)}</div>`;
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Falsch – ${escapeHtml(explanation)}</div>`;
       }
@@ -5534,107 +6029,77 @@
     function checkCalcAnswer(subId, folderId, qId, expected, explanation) {
       const val = document.getElementById("ans-" + qId).value.trim().replace(",", ".");
       const fb = document.getElementById("fb-" + qId);
-      if (!val) return;
+      if (!fb) return;
       if (val.toLowerCase() === expected.trim().replace(",", ".").toLowerCase()) {
         const count = incrementQuestionCorrectCount(subId, folderId, qId);
         const res = recordLearningActivity(10);
         const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
-        const archivedMsg = count >= MASTERY_THRESHOLD ? ` · 🗄️ ${MASTERY_THRESHOLD}/${MASTERY_THRESHOLD}× richtig → Frage abgelegt!` : ` · ${count}/${MASTERY_THRESHOLD}× richtig`;
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${escapeHtml(streakMsg)}${escapeHtml(archivedMsg)}) – ${escapeHtml(explanation)}</div>`;
+        const archMsg = count >= MASTERY_THRESHOLD ? ` · 🌟 ${count}/${MASTERY_THRESHOLD}× richtig (abgelegt!)` : ` · ${count}/${MASTERY_THRESHOLD}× richtig`;
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${escapeHtml(streakMsg)}${escapeHtml(archMsg)}) – ${escapeHtml(explanation)}</div>`;
       } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${escapeHtml(expected)}) – ${escapeHtml(explanation)}</div>`;
+        fb.innerHTML = `<div class="result-banner result-err">❌ Nicht ganz (Erwartet: ${escapeHtml(expected)}) – ${escapeHtml(explanation)}</div>`;
       }
       typesetMath(fb);
     }
 
-    function importQuestionCode(subId, folderId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen hinzufügen.");
-      const raw = document.getElementById("questionCodeInput").value.trim();
-      const fb = document.getElementById("questionImportFeedback");
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
-        const sub = subjects.find(s => s.id === subId);
-        const folder = sub?.folders.find(f => f.id === folderId);
-        if (!folder) throw new Error("Ordner nicht gefunden.");
-
-        let added = 0;
-        list.forEach((item, idx) => {
-          if (!item.question) return;
-          const qType = item.type === "calc" ? "calc" : "mc";
-          folder.questions.push({
-            id: "q-imp-" + Date.now() + "-" + idx,
-            type: qType,
-            question: item.question,
-            options: Array.isArray(item.options) ? item.options : ["Option A", "Option B", "Option C", "Option D"],
-            correct: item.correct || (Array.isArray(item.options) ? item.options[0] : "Option A"),
-            answer: item.answer !== undefined ? String(item.answer) : "",
-            explanation: item.explanation || "Keine Erklärung angegeben.",
-            flashcard: item.flashcard && item.flashcard.front ? {
-              front: String(item.flashcard.front),
-              back: String(item.flashcard.back || "")
-            } : null
-          });
-          added++;
-        });
-
-        if (added === 0) throw new Error("Keine gültige Frage enthalten.");
-        saveSubjects();
-        renderSidebar();
-        renderView();
-        document.getElementById("questionImportFeedback").innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${escapeHtml(folder.name)}“ importiert!</div>`;
-      } catch (err) {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Fehler beim Import: ${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function deleteQuestion(subId, folderId, qId) {
-      if (!isAdmin()) return;
-      const sub = subjects.find(s => s.id === subId);
-      const folder = sub?.folders.find(f => f.id === folderId);
-      if (!folder) return;
-      folder.questions = folder.questions.filter(q => q.id !== qId);
-      saveSubjects();
-      renderSidebar();
-      renderView();
-    }
-
     function renderSettingsView() {
       const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-      const currentAccent = (localStorage.getItem("lmg_accent") || "#2563eb").toLowerCase();
-      const colors = ["#2563eb", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4"];
+      const currentAccent = localStorage.getItem("lmg_accent") || "#2563eb";
+      const colors = [
+        { name: "Blau", hex: "#2563eb" },
+        { name: "Indigo", hex: "#4f46e5" },
+        { name: "Smaragd", hex: "#10b981" },
+        { name: "Amber", hex: "#f59e0b" },
+        { name: "Rose", hex: "#e11d48" },
+        { name: "Violett", hex: "#8b5cf6" }
+      ];
 
       return `
         <div class="card">
-          <h3>🎨 Darstellung &amp; Design</h3>
+          <h3 style="margin-bottom:4px;">🎨 Erscheinungsbild &amp; Design</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">
+            Wähle Hell- oder Dunkelmodus sowie deine Akzentfarbe.
+          </p>
+
           <div class="setting-row">
-            <div><div style="font-weight:700;">Erscheinungsbild</div><div style="font-size:13px; color:var(--text-muted);">Zwischen hellem und dunklem Modus wechseln</div></div>
+            <div>
+              <div style="font-weight:700;">Farbmodus (Theme)</div>
+              <div style="font-size:12.5px; color:var(--text-muted);">Aktuell: ${currentTheme === "dark" ? "Dunkelmodus" : "Hellmodus"}</div>
+            </div>
             <div style="display:flex; gap:8px;">
               <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('light')">☀️ Hell</button>
               <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('dark')">🌙 Dunkel</button>
             </div>
           </div>
+
           <div class="setting-row">
-            <div><div style="font-weight:700;">Akzentfarbe</div><div style="font-size:13px; color:var(--text-muted);">Farbe für Buttons, aktive Menüpunkte und Badges</div></div>
-            <div style="display:flex; gap:10px; align-items:center;">
-              ${colors.map(c => `<span class="swatch ${currentAccent === c.toLowerCase() ? 'active' : ''}" style="background:${c};" onclick="setAccentColor('${c}')"></span>`).join("")}
+            <div>
+              <div style="font-weight:700;">Akzentfarbe</div>
+              <div style="font-size:12.5px; color:var(--text-muted);">Buttons, aktive Navigation und Highlights</div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              ${colors.map(c => `
+                <button class="swatch ${currentAccent.toLowerCase() === c.hex.toLowerCase() ? 'active' : ''}"
+                        style="background:${c.hex};"
+                        title="${c.name}"
+                        onclick="setAccentColor('${c.hex}')"></button>
+              `).join("")}
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h3>🔑 Eigenes Passwort ändern</h3>
+          <h3 style="margin-bottom:4px;">🔐 Eigenes Passwort ändern</h3>
           <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
             Angemeldet als <strong>${escapeHtml(currentUser.name)}</strong> (${escapeHtml(currentUser.email)}).
           </p>
           <div class="form-grid-2">
             <div>
-              <label style="font-size:13px; font-weight:600;">Neues Passwort (mind. 4 Zeichen)</label>
+              <label style="font-size:12.5px; font-weight:600;">Neues Passwort (mind. 4 Zeichen)</label>
               <input type="password" id="settingsNewPwd1" class="input-field" placeholder="Neues Passwort...">
             </div>
             <div>
-              <label style="font-size:13px; font-weight:600;">Neues Passwort bestätigen</label>
+              <label style="font-size:12.5px; font-weight:600;">Neues Passwort wiederholen</label>
               <input type="password" id="settingsNewPwd2" class="input-field" placeholder="Wiederholen...">
             </div>
           </div>
@@ -5649,166 +6114,174 @@
 
       return `
         <div class="card">
-          <h3>➕ Neues Unterrichtsfach anlegen (Admin)</h3>
+          <h3 style="margin-bottom:4px;">➕ Neues Unterrichtsfach anlegen</h3>
           <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
-            Lege ein neues Fach an – es erscheint sofort in der Seitenleiste sowie im Admin-Bereich.
+            Lege ein neues Unterrichtsfach inklusive Start-Ordner an. Es erscheint sofort in der Seitenleiste und wird in der Cloud synchronisiert.
           </p>
+
           <div class="form-grid-2">
             <div>
-              <label style="font-size:13px; font-weight:600;">Fachname *</label>
-              <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Werkstoffkunde oder Physik">
+              <label style="font-size:12.5px; font-weight:600;">Fachname *</label>
+              <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Informatik / SQL oder Werkstätte">
             </div>
             <div>
-              <label style="font-size:13px; font-weight:600;">Symbol / Icon</label>
-              <input type="text" id="newSubjectIconInput" class="input-field" value="📘" placeholder="z. B. 🔬, 🏭, 📐">
-            </div>
-          </div>
-          <div class="form-grid-2">
-            <div>
-              <label style="font-size:13px; font-weight:600;">Kategorie</label>
+              <label style="font-size:12.5px; font-weight:600;">Kategorie</label>
               <select id="newSubjectCategoryInput" class="select-field">
                 <option value="TECHNIK">TECHNIK</option>
                 <option value="HAUPTFACH">HAUPTFACH</option>
                 <option value="MATURA">MATURA</option>
-                <option value="ALLGEMEIN">ALLGEMEIN</option>
+                <option value="SONSTIGES">SONSTIGES</option>
               </select>
             </div>
+          </div>
+
+          <div class="form-grid-2">
             <div>
-              <label style="font-size:13px; font-weight:600;">Erster Ordnername</label>
-              <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen" placeholder="z. B. Grundlagen">
+              <label style="font-size:12.5px; font-weight:600;">Icon (Emoji)</label>
+              <input type="text" id="newSubjectIconInput" class="input-field" value="📘" placeholder="z. B. 💻 oder 🛠️">
+            </div>
+            <div>
+              <label style="font-size:12.5px; font-weight:600;">Erster Ordnername</label>
+              <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen" placeholder="z. B. Kapitel 1">
             </div>
           </div>
-          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
-            <label style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;">
-              <span>Farbe:</span>
-              <input type="color" id="newSubjectColorInput" value="#2563eb" style="width:42px; height:32px; border:none; background:transparent; cursor:pointer;">
-            </label>
-            <label style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; cursor:pointer;">
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+            <label class="user-check-label" style="margin:0;">
               <input type="checkbox" id="newSubjectAccessAllInput" checked>
-              <span>Sofort für alle Benutzer freischalten</span>
+              <span>Für alle Benutzer freischalten</span>
             </label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:12.5px; font-weight:600;">Farbe:</label>
+              <input type="color" id="newSubjectColorInput" value="#2563eb" style="width:42px; height:34px; border:none; background:transparent; cursor:pointer;">
+            </div>
           </div>
-          <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Fach erstellen</button>
+
+          <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach erstellen</button>
           <div id="newSubjectFeedback"></div>
-        </div>
 
-        <div class="card">
-          <h3>🏷️ Rollen verwalten (Standard &amp; Eigene Rollen)</h3>
-          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
-            Standardrollen (<strong>Schüler</strong>, <strong>Lehrer</strong>, <strong>Admin</strong>) sind immer verfügbar. Zusätzlich kannst du eigene Rollen erstellen, umbenennen und löschen.
-          </p>
-
-          <div class="form-grid-2" style="align-items:end;">
-            <div>
-              <label style="font-size:13px; font-weight:600;">Name der neuen Rolle</label>
-              <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor, Moderator, Werkmeister">
-            </div>
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding-bottom:2px;">
-              <label style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px; cursor:pointer;">
-                <input type="checkbox" id="adminNewRoleIsAdmin">
-                <span>Admin-Rechte gewähren</span>
-              </label>
-              <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Rolle anlegen</button>
-            </div>
-          </div>
-
-          <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
-            ${availableRoles.map(r => `
-              <div class="setting-row" style="padding:10px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:10px;">
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                  <strong>${escapeHtml(r.name)}</strong>
-                  <span class="role-badge">${r.builtIn ? "Standard" : "Eigene Rolle"}</span>
-                  ${r.isAdminRole ? `<span class="count-pill" style="background:var(--accent-soft); color:var(--accent);">Admin-Rechte</span>` : ""}
+          <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+            <h4 style="font-size:14px; margin-bottom:8px;">Vorhandene Unterrichtsfächer (${subjects.length})</h4>
+            ${subjects.map(s => `
+              <div class="exam-item-box" style="padding:10px 14px;">
+                <div>
+                  <strong>${escapeHtml(s.icon)} ${escapeHtml(s.name)}</strong>
+                  <span class="count-pill" style="margin-left:6px;">${escapeHtml(s.category)}</span>
+                  <span class="count-pill" style="margin-left:4px;">${(s.folders || []).length} Ordner</span>
                 </div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                  ${!r.builtIn ? `
-                    <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="adminRenameCustomRole('${escapeJsSingle(r.name)}')">✏️ Umbenennen</button>
-                    <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${escapeJsSingle(r.name)}')">Löschen</button>
-                  ` : `<span style="font-size:12px; color:var(--text-muted);">Systemrolle</span>`}
-                </div>
+                ${subjects.length > 1 ? `<button type="button" class="btn-danger" onclick="adminDeleteSubject('${escapeJsSingle(s.id)}')">Fach löschen</button>` : ""}
               </div>
             `).join("")}
           </div>
         </div>
 
         <div class="card">
-          <h3>👥 Benutzer &amp; Initialpasswörter verwalten</h3>
-          <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-            Lege neue Benutzer mit einem Initialpasswort an. Beim ersten Login müssen sie ein eigenes Passwort vergeben.
+          <h3 style="margin-bottom:4px;">🏷️ Rollen verwalten (Schüler, Lehrer, Admin &amp; Eigene Rollen)</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+            Erstelle eigene Rollen, benenne sie um oder lösche sie – alle Rollen stehen sofort bei der Benutzerverwaltung zur Verfügung.
           </p>
+
           <div class="form-grid-2">
             <div>
-              <label style="font-size:13px; font-weight:600;">Name *</label>
-              <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna M.">
+              <label style="font-size:12.5px; font-weight:600;">Name der neuen Rolle</label>
+              <input type="text" id="adminNewRoleName" class="input-field" placeholder="z. B. Tutor oder Gruppenleiter">
             </div>
-            <div>
-              <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
-              <input type="email" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@lernen-mit-gerry.at">
-            </div>
-          </div>
-          <div class="form-grid-2">
-            <div>
-              <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code *</label>
-              <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
-            </div>
-            <div>
-              <label style="font-size:13px; font-weight:600;">Rolle</label>
-              <select id="adminNewUserRole" class="select-field">
-                ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}" ${r.name === "Schüler" ? "selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}
-              </select>
+            <div style="display:flex; align-items:center; padding-top:14px;">
+              <label class="user-check-label" style="margin:0; width:100%;">
+                <input type="checkbox" id="adminNewRoleIsAdmin">
+                <span>Admin-Rechte gewähren</span>
+              </label>
             </div>
           </div>
-          <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer anlegen</button>
+          <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Rolle anlegen / speichern</button>
 
-          <div style="margin-top:18px;">
-            ${users.map(u => {
-              const roleOptionsHtml = availableRoles.map(r =>
-                `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? "selected" : ""}>${escapeHtml(r.name)}</option>`
-              ).join("");
-
-              return `
-                <div class="setting-row">
-                  <div>
-                    <strong>${escapeHtml(u.name)}</strong> <span class="role-badge">${escapeHtml(u.role)}</span>
-                    <div style="font-size:12px; color:var(--text-muted);">
-                      ${escapeHtml(u.email)} • ${u.points} Pkt • 🔥 ${u.streak || 0}d •
-                      ${u.mustChangePassword
-                        ? `<span style="color:#d97706; font-weight:700;">Initialpasswort aktiv: <code>${escapeHtml(u.password)}</code></span>`
-                        : `<span style="color:#10b981; font-weight:600;">Eigenes Passwort gesetzt</span>`
-                      }
-                    </div>
-                  </div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <select class="select-field" style="margin:0; width:auto; padding:6px 10px; font-size:12px;" onchange="adminChangeUserRole(${u.id}, this.value)">
-                      ${roleOptionsHtml}
-                    </select>
-                    <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${u.id})">🔑 Initialpasswort setzen</button>
-                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Löschen</button>` : ""}
-                  </div>
+          <div style="margin-top:14px;">
+            ${availableRoles.map(r => `
+              <div class="exam-item-box" style="padding:10px 14px;">
+                <div>
+                  <strong>${escapeHtml(r.name)}</strong>
+                  ${r.isAdminRole ? `<span class="days-badge" style="margin-left:6px; padding:2px 8px; font-size:11px;">Admin-Rechte</span>` : `<span class="count-pill" style="margin-left:6px;">Standard-Rechte</span>`}
+                  ${r.builtIn ? `<span style="font-size:11.5px; color:var(--text-muted); margin-left:6px;">(Systemrolle)</span>` : ""}
                 </div>
-              `;
-            }).join("")}
+                ${!r.builtIn ? `
+                  <div style="display:flex; gap:6px;">
+                    <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="adminRenameCustomRole('${escapeJsSingle(r.name)}')">Umbenennen</button>
+                    <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${escapeJsSingle(r.name)}')">Löschen</button>
+                  </div>
+                ` : ""}
+              </div>
+            `).join("")}
           </div>
         </div>
 
         <div class="card">
-          <h3>🔐 Kurs-Freigaben pro Fach</h3>
+          <h3 style="margin-bottom:4px;">👤 Benutzer anlegen &amp; Initialpasswort vergeben</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+            Neue Benutzer erhalten ein Initialpasswort und müssen beim ersten Login ein eigenes Passwort festlegen.
+          </p>
+          <div class="form-grid-2">
+            <div>
+              <label style="font-size:12.5px; font-weight:600;">Name</label>
+              <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna B.">
+            </div>
+            <div>
+              <label style="font-size:12.5px; font-weight:600;">E-Mail (optional)</label>
+              <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@beispiel.at">
+            </div>
+            <div>
+              <label style="font-size:12.5px; font-weight:600;">Initialpasswort / Code</label>
+              <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
+            </div>
+            <div>
+              <label style="font-size:12.5px; font-weight:600;">Rolle</label>
+              <select id="adminNewUserRole" class="select-field">
+                ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="adminCreateUser()">Benutzer anlegen</button>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom:12px;">📋 Alle Benutzer (${users.length})</h3>
+          ${users.map(u => `
+            <div class="exam-item-box">
+              <div>
+                <div style="font-weight:700;">${escapeHtml(u.name)} <span class="role-badge">${escapeHtml(u.role)}</span></div>
+                <div style="font-size:12.5px; color:var(--text-muted);">
+                  ${escapeHtml(u.email)} • ${u.points} Pkt • ${u.streak || 0}d 🔥 •
+                  ${u.mustChangePassword
+                    ? `<strong style="color:#b45309;">Initialpasswort aktiv: <code>${escapeHtml(u.password)}</code></strong>`
+                    : `Eigenes Passwort gesetzt`}
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <select class="select-field" style="margin:0; padding:6px 10px; width:auto; font-size:12.5px;"
+                        onchange="adminChangeUserRole(${u.id}, this.value)">
+                  ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? "selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}
+                </select>
+                <button class="btn-secondary" onclick="adminResetUserPassword(${u.id})">Initialpasswort setzen</button>
+                ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Löschen</button>` : ""}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachberechtigungen</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+            Lege fest, welche Benutzer Zugriff auf welches Fach haben.
+          </p>
           ${subjects.map(sub => {
             const safeSubId = escapeJsSingle(sub.id);
             return `
               <div style="padding:14px 0; border-bottom:1px solid var(--border);">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                  <div>
-                    <strong>${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</strong>
-                    <span class="count-pill" style="margin-left:6px;">${sub.accessAll ? "Alle Benutzer" : "Eingeschränkt"}</span>
-                  </div>
-                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <label style="font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
-                      <input type="checkbox" ${sub.accessAll ? "checked" : ""} onchange="toggleAccessAll('${safeSubId}', this.checked)">
-                      <span>Für alle freigeben</span>
-                    </label>
-                    ${subjects.length > 1 ? `<button type="button" class="btn-danger" onclick="adminDeleteSubject('${safeSubId}')">Fach löschen</button>` : ""}
-                  </div>
+                  <strong>${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</strong>
+                  <label style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+                    <input type="checkbox" ${sub.accessAll ? "checked" : ""} onchange="toggleSubjectAllAccess('${safeSubId}', this.checked)">
+                    Für alle Benutzer freigeben
+                  </label>
                 </div>
                 ${!sub.accessAll ? `
                   <div class="user-checkbox-grid">
@@ -5816,57 +6289,58 @@
                       const checked = Array.isArray(sub.allowedUsers) && sub.allowedUsers.includes(u.id);
                       return `
                         <label class="user-check-label">
-                          <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleUserSubjectAccess('${safeSubId}', ${u.id}, this.checked)">
+                          <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleSubjectUserAccess('${safeSubId}', ${u.id}, this.checked)">
                           <span>${escapeHtml(u.name)}</span>
                         </label>
                       `;
                     }).join("")}
                   </div>
-                ` : ""}
+                ` : `<div style="font-size:12px; color:var(--text-muted); margin-top:6px;">Aktuell für alle Benutzer sichtbar.</div>`}
               </div>
             `;
           }).join("")}
         </div>
 
         <div class="card">
-          <h3>📄 Impressum bearbeiten (Admin)</h3>
+          <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten</h3>
           <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
-            Änderungen werden sofort auf der Impressum-Seite angezeigt und synchronisiert.
+            Pflege die Angaben für die Impressum-Seite. Änderungen werden sofort gespeichert und synchronisiert.
           </p>
           <div class="form-grid-2">
             <div>
-              <label style="font-size:13px; font-weight:600;">Betreiber / Projektname</label>
-              <input type="text" id="adminImpOperator" class="input-field" value="${escapeHtml(imprintData.operatorName)}">
+              <label style="font-size:12.5px; font-weight:600;">Betreiber / Projekt</label>
+              <input type="text" id="adminImpOperator" class="input-field" value="${escapeHtml(imprintData.operatorName || "")}">
             </div>
             <div>
-              <label style="font-size:13px; font-weight:600;">Kontakt-E-Mail</label>
-              <input type="text" id="adminImpEmail" class="input-field" value="${escapeHtml(imprintData.email)}">
+              <label style="font-size:12.5px; font-weight:600;">Kontakt-E-Mail</label>
+              <input type="text" id="adminImpEmail" class="input-field" value="${escapeHtml(imprintData.email || "")}">
             </div>
           </div>
-          <label style="font-size:13px; font-weight:600;">Standort / Anschrift</label>
-          <input type="text" id="adminImpAddress" class="input-field" value="${escapeHtml(imprintData.address)}">
-          <label style="font-size:13px; font-weight:600;">Zweck des Angebots</label>
-          <textarea id="adminImpRole" class="textarea-field">${escapeHtml(imprintData.websiteRole)}</textarea>
-          <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
-          <textarea id="adminImpDisclaimer" class="textarea-field">${escapeHtml(imprintData.disclaimer)}</textarea>
-          <label style="font-size:13px; font-weight:600;">Datenschutzhinweis</label>
-          <textarea id="adminImpPrivacy" class="textarea-field">${escapeHtml(imprintData.privacyNote)}</textarea>
+          <label style="font-size:12.5px; font-weight:600;">Standort / Anschrift</label>
+          <input type="text" id="adminImpAddress" class="input-field" value="${escapeHtml(imprintData.address || "")}">
+          <label style="font-size:12.5px; font-weight:600;">Zweck des Angebots</label>
+          <textarea id="adminImpRole" class="textarea-field">${escapeHtml(imprintData.websiteRole || "")}</textarea>
+          <label style="font-size:12.5px; font-weight:600;">Haftungsausschluss</label>
+          <textarea id="adminImpDisclaimer" class="textarea-field">${escapeHtml(imprintData.disclaimer || "")}</textarea>
+          <label style="font-size:12.5px; font-weight:600;">Datenschutzhinweis</label>
+          <textarea id="adminImpPrivacy" class="textarea-field">${escapeHtml(imprintData.privacyNote || "")}</textarea>
           <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
           <div id="adminImprintSavedMsg"></div>
         </div>
       `;
     }
 
-    function toggleAccessAll(subId, checked) {
+    function toggleSubjectAllAccess(subId, checked) {
+      if (!isAdmin()) return;
       const sub = subjects.find(s => s.id === subId);
       if (!sub) return;
       sub.accessAll = checked;
       saveSubjects();
-      renderSidebar();
       renderView();
     }
 
-    function toggleUserSubjectAccess(subId, userId, checked) {
+    function toggleSubjectUserAccess(subId, userId, checked) {
+      if (!isAdmin()) return;
       const sub = subjects.find(s => s.id === subId);
       if (!sub) return;
       if (!Array.isArray(sub.allowedUsers)) sub.allowedUsers = [];
