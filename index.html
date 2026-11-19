@@ -2322,7 +2322,14 @@
       }
     ];
 
-    let subjects = JSON.parse(localStorage.getItem("lmg_subjects_v3")) || defaultSubjects;
+    let subjects = (JSON.parse(localStorage.getItem("lmg_subjects_v3")) || defaultSubjects).map(s => ({
+      ...s,
+      folders: Array.isArray(s.folders) ? s.folders.map(f => ({
+        ...f,
+        questions: Array.isArray(f.questions) ? f.questions : []
+      })) : []
+    }));
+
     function saveSubjects() {
       localStorage.setItem("lmg_subjects_v3", JSON.stringify(subjects));
       queueCloudSync();
@@ -3738,6 +3745,7 @@
       const sub = subjects.find(s => s.id === subId);
       const folder = sub?.folders?.find(f => f.id === folderId);
       if (!sub || !folder) return;
+      if (!Array.isArray(folder.questions)) folder.questions = [];
 
       const type = document.getElementById("newQType").value;
       const qText = document.getElementById("newQText").value.trim();
@@ -3822,6 +3830,7 @@
       const newFolder = { id: "f-" + Date.now(), name, questions: [] };
       sub.folders.push(newFolder);
       activeFolderId = newFolder.id;
+      showArchivedMastered = false;
       saveSubjects();
       renderSidebar();
       renderView();
@@ -4419,8 +4428,8 @@
                 </div>
                 <button class="btn-secondary" onclick="copyAiPromptForFormula()">📋 Formel-Prompt kopieren</button>
               </div>
-              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Das Drehmoment beschreibt die Drehbewegung um einen Drehpunkt.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}'></textarea>
-              <button class="btn-primary" onclick="importAiFormulaCode()">⚡ Formel-Code direkt einfügen</button>
+              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Das Drehmoment beschreibt die Drehbewegung um einen Drehpunkt.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"calcExpr":"v1 * v2","unit":"Nm"}'></textarea>
+              <button class="btn-primary" onclick="importAiFormulaCode()">📥 Formel-Code übernehmen</button>
               <div id="aiFormulaMsg"></div>
             </div>
             ` : ""}
@@ -4428,338 +4437,84 @@
         `;
       }
       else if (currentView === "custom-exam") {
-        heading.innerText = "🎓 Eigene Prüfung";
+        heading.innerText = "🎓 Eigene Prüfung erstellen";
         container.innerHTML = renderCustomExamView(visible);
-      }
-      else if (currentView.startsWith("subject-")) {
-        const subId = currentView.replace("subject-", "");
-        const sub = subjects.find(s => s.id === subId);
-        if (!sub) {
-          currentView = "home";
-          renderView();
-          return;
-        }
-        if (!Array.isArray(sub.folders)) sub.folders = [];
-        heading.innerText = `${sub.icon} ${sub.name}`;
-
-        if (!activeFolderId || !sub.folders.some(f => f.id === activeFolderId)) {
-          activeFolderId = sub.folders.length > 0 ? sub.folders[0].id : null;
-        }
-        const currentFolder = sub.folders.find(f => f.id === activeFolderId) || null;
-        const folderQuestions = currentFolder && Array.isArray(currentFolder.questions) ? currentFolder.questions : [];
-        const activeQuestions = folderQuestions.filter(q => !isQuestionArchived(sub.id, currentFolder.id, q.id));
-        const archivedQuestions = folderQuestions.filter(q => isQuestionArchived(sub.id, currentFolder.id, q.id));
-        const displayedQuestions = showArchivedMastered ? archivedQuestions : activeQuestions;
-
-        const safeSubId = escapeJsSingle(sub.id);
-
-        container.innerHTML = `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-              <div>
-                <span class="count-pill">${escapeHtml(sub.category)}</span>
-                <h3 style="margin-top:6px;">Unterordner &amp; Themen in ${escapeHtml(sub.name)}</h3>
-              </div>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <button class="btn-secondary" onclick="toggleFavoriteSubject('${safeSubId}')">${sub.favorite ? '⭐ Favorit' : '☆ Als Favorit'}</button>
-                ${isAdmin() ? `
-                  <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:190px;" placeholder="Neuer Unterordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createNewFolder('${safeSubId}');}">
-                  <button class="btn-primary" onclick="createNewFolder('${safeSubId}')">+ Ordner</button>
-                  <button class="btn-danger" onclick="adminDeleteSubject('${safeSubId}')">🗑️ Fach löschen</button>
-                ` : ""}
-              </div>
-            </div>
-
-            <div class="tab-strip">
-              ${sub.folders.length === 0
-                ? `<span style="font-size:13px; color:var(--text-muted);">Noch keine Unterordner in diesem Fach vorhanden.</span>`
-                : sub.folders.map(f => {
-                    const safeFId = escapeJsSingle(f.id);
-                    const isSelected = f.id === activeFolderId;
-                    const qArr = Array.isArray(f.questions) ? f.questions : [];
-                    const openCount = qArr.filter(q => !isQuestionArchived(sub.id, f.id, q.id)).length;
-                    return `
-                      <span style="display:inline-flex; align-items:center; gap:4px;">
-                        <button class="btn-secondary" style="${isSelected ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeFolderId='${safeFId}'; renderView();">
-                          📁 ${escapeHtml(f.name)} (${openCount}/${qArr.length})
-                        </button>
-                        ${isAdmin() ? `
-                          <button type="button"
-                                  class="btn-danger"
-                                  style="padding:7px 9px;"
-                                  title="Unterordner „${escapeHtml(f.name)}“ löschen"
-                                  onclick="deleteFolder('${safeSubId}', '${safeFId}')">🗑️</button>
-                        ` : ""}
-                      </span>
-                    `;
-                  }).join("")
-              }
-            </div>
-
-            ${currentFolder ? `
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">
-                <div class="tab-strip" style="border-bottom:none; padding-bottom:0; margin-bottom:0;">
-                  <button type="button" class="btn-secondary" style="${folderPracticeMode === 'questions' && !showArchivedMastered ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="folderPracticeMode='questions'; showArchivedMastered=false; renderView();">
-                    ❓ Fragen (${activeQuestions.length})
-                  </button>
-                  <button type="button" class="btn-secondary" style="${folderPracticeMode === 'flashcards' && !showArchivedMastered ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="folderPracticeMode='flashcards'; showArchivedMastered=false; renderView();">
-                    🃏 Karteikarten (${activeQuestions.length})
-                  </button>
-                  <button type="button" class="btn-secondary" style="${showArchivedMastered ? 'border-color:#10b981; color:#10b981; font-weight:700;' : ''}" onclick="showArchivedMastered=!showArchivedMastered; renderView();">
-                    📦 Abgelegt (${archivedQuestions.length})
-                  </button>
-                </div>
-                <span style="font-size:12px; color:var(--text-muted);">
-                  Nach <strong>${MASTERY_THRESHOLD}× richtig</strong> automatisch abgelegt
-                </span>
-              </div>
-
-              ${showArchivedMastered
-                ? (archivedQuestions.length === 0
-                    ? `<p style="color:var(--text-muted); font-size:13.5px;">Noch keine Fragen in diesem Ordner abgelegt (${MASTERY_THRESHOLD}× richtig beantwortet).</p>`
-                    : archivedQuestions.map((q, idx) => {
-                        const safeQId = escapeJsSingle(q.id);
-                        const safeFId = escapeJsSingle(currentFolder.id);
-                        const count = getQuestionCorrectCount(sub.id, currentFolder.id, q.id);
-                        return `
-                          <div class="question-card" style="opacity:0.92;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                              <span class="mastered-badge">✅ ${count}/${MASTERY_THRESHOLD}× richtig · Abgelegt</span>
-                              <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFId}', '${safeQId}')">
-                                ↩️ Wieder aktivieren
-                              </button>
-                            </div>
-                            <div style="font-weight:700; font-size:15px; margin-top:8px;">${idx + 1}. ${escapeHtml(q.question)}</div>
-                            <div style="font-size:13px; color:var(--text-muted); margin-top:6px;">
-                              Lösung: <strong>${escapeHtml(q.type === "mc" ? q.correct : q.answer)}</strong> · ${escapeHtml(q.explanation || "")}
-                            </div>
-                          </div>
-                        `;
-                      }).join(""))
-                : (folderPracticeMode === "flashcards"
-                    ? (activeQuestions.length === 0
-                        ? `<p style="color:var(--text-muted); font-size:13.5px;">Alle Karteikarten in diesem Ordner wurden bereits gemeistert und abgelegt!</p>`
-                        : activeQuestions.map((q, idx) => {
-                            const card = buildFlashcardForQuestion(q);
-                            const isRevealed = revealedFlashcards.has(q.id);
-                            const safeQId = escapeJsSingle(q.id);
-                            const safeFId = escapeJsSingle(currentFolder.id);
-                            const count = getQuestionCorrectCount(sub.id, currentFolder.id, q.id);
-                            return `
-                              <div class="flashcard-box">
-                                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
-                                  <span class="flashcard-side-label">Karteikarte ${idx + 1} · ${count}/${MASTERY_THRESHOLD}× richtig</span>
-                                  ${isAdmin() ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${safeSubId}', '${safeFId}', '${safeQId}')">Löschen</button>` : ""}
-                                </div>
-                                <div style="font-weight:700; font-size:16px; line-height:1.45;">${escapeHtml(card.front)}</div>
-
-                                ${isRevealed ? `
-                                  <div class="flashcard-answer-panel">
-                                    <div class="flashcard-side-label" style="color:#10b981;">Lösung &amp; Erklärung</div>
-                                    <div style="font-size:14.5px; line-height:1.5;">${escapeHtml(card.back)}</div>
-                                  </div>
-                                  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-                                    <button type="button" class="btn-primary" style="background:#10b981;" onclick="rateFlashcard('${safeSubId}', '${safeFId}', '${safeQId}', true)">
-                                      ✅ Gewusst (+1 Richtung Ablegen)
-                                    </button>
-                                    <button type="button" class="btn-secondary" onclick="rateFlashcard('${safeSubId}', '${safeFId}', '${safeQId}', false)">
-                                      ❌ Noch üben
-                                    </button>
-                                  </div>
-                                ` : `
-                                  <button type="button" class="btn-primary" style="margin-top:12px;" onclick="toggleFlashcardReveal('${safeQId}')">
-                                    👁️ Lösung umdrehen
-                                  </button>
-                                `}
-                              </div>
-                            `;
-                          }).join(""))
-                    : (activeQuestions.length === 0
-                        ? `<p style="color:var(--text-muted); font-size:13.5px;">Keine aktiven Fragen mehr in diesem Ordner (${archivedQuestions.length} abgelegt).</p>`
-                        : activeQuestions.map((q, idx) => {
-                            const safeQId = escapeJsSingle(q.id);
-                            const safeFId = escapeJsSingle(currentFolder.id);
-                            const safeExpl = escapeJsSingle(q.explanation || "");
-                            const count = getQuestionCorrectCount(sub.id, currentFolder.id, q.id);
-                            if (q.type === "mc") {
-                              const safeCorr = escapeJsSingle(q.correct);
-                              return `
-                                <div class="question-card">
-                                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                                    <span style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</span>
-                                    <div style="display:flex; align-items:center; gap:8px;">
-                                      <span class="count-pill">${count}/${MASTERY_THRESHOLD}× richtig</span>
-                                      ${isAdmin() ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${safeSubId}', '${safeFId}', '${safeQId}')">Löschen</button>` : ""}
-                                    </div>
-                                  </div>
-                                  <div style="margin-top:8px;">
-                                    ${(q.options || []).map(opt => `
-                                      <div class="mc-option" onclick="checkMcQuestion('${safeSubId}', '${safeFId}', '${safeQId}', '${escapeJsSingle(opt)}', '${safeCorr}', '${safeExpl}')">
-                                        <span>🔘</span> <span>${escapeHtml(opt)}</span>
-                                      </div>
-                                    `).join("")}
-                                  </div>
-                                  <div id="fb-${escapeHtml(q.id)}"></div>
-                                </div>
-                              `;
-                            } else {
-                              const safeAns = escapeJsSingle(q.answer);
-                              const inputId = `ans-${escapeHtml(q.id)}`;
-                              return `
-                                <div class="question-card">
-                                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                                    <span style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</span>
-                                    <div style="display:flex; align-items:center; gap:8px;">
-                                      <span class="count-pill">${count}/${MASTERY_THRESHOLD}× richtig</span>
-                                      ${isAdmin() ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${safeSubId}', '${safeFId}', '${safeQId}')">Löschen</button>` : ""}
-                                    </div>
-                                  </div>
-                                  <div style="display:flex; gap:8px; margin-top:10px;">
-                                    <input type="text" id="${inputId}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
-                                    <button class="btn-primary" onclick="checkFolderQuestion('${safeSubId}', '${safeFId}', '${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeExpl}')">Prüfen</button>
-                                  </div>
-                                  <div id="fb-${escapeHtml(q.id)}"></div>
-                                </div>
-                              `;
-                            }
-                          }).join(""))
-                    )
-              }
-
-              ${isAdmin() ? `
-                <div class="ai-code-box" style="margin-top:16px;">
-                  <strong style="font-size:14px;">➕ Neue Frage in „${escapeHtml(currentFolder.name)}“ erstellen (nur Admin)</strong>
-                  <div class="form-grid-2" style="margin-top:10px;">
-                    <div>
-                      <label style="font-size:12px; font-weight:600;">Fragetyp</label>
-                      <select id="newQType" class="select-field" style="margin-bottom:8px;" onchange="toggleNewQFields()">
-                        <option value="mc">Multiple-Choice</option>
-                        <option value="calc">Rechen- / Kurzantwort</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style="font-size:12px; font-weight:600;">Erklärung / Lösungshinweis</label>
-                      <input type="text" id="newQExpl" class="input-field" style="margin-bottom:8px;" placeholder="Warum ist diese Antwort richtig?">
-                    </div>
-                  </div>
-
-                  <label style="font-size:12px; font-weight:600;">Fragestellung</label>
-                  <input type="text" id="newQText" class="input-field" style="margin-bottom:10px;" placeholder="Frage eingeben...">
-
-                  <div id="newQMcFields">
-                    <div class="form-grid-2">
-                      <input type="text" id="newQOpt1" class="input-field" style="margin-bottom:8px;" placeholder="Antwortmöglichkeit 1">
-                      <input type="text" id="newQOpt2" class="input-field" style="margin-bottom:8px;" placeholder="Antwortmöglichkeit 2">
-                      <input type="text" id="newQOpt3" class="input-field" style="margin-bottom:8px;" placeholder="Antwortmöglichkeit 3 (optional)">
-                      <input type="text" id="newQOpt4" class="input-field" style="margin-bottom:8px;" placeholder="Antwortmöglichkeit 4 (optional)">
-                    </div>
-                    <label style="font-size:12px; font-weight:600;">Welche Antwort ist richtig?</label>
-                    <select id="newQCorrectIdx" class="select-field" style="margin-bottom:10px;">
-                      <option value="0">Antwortmöglichkeit 1</option>
-                      <option value="1">Antwortmöglichkeit 2</option>
-                      <option value="2">Antwortmöglichkeit 3</option>
-                      <option value="3">Antwortmöglichkeit 4</option>
-                    </select>
-                  </div>
-
-                  <div id="newQCalcFields" style="display:none;">
-                    <label style="font-size:12px; font-weight:600;">Richtiges Ergebnis / Antwort</label>
-                    <input type="text" id="newQCalcAns" class="input-field" style="margin-bottom:10px;" placeholder="z. B. 42 oder 12.5">
-                  </div>
-
-                  <button class="btn-primary" onclick="addQuestionToFolder('${safeSubId}', '${safeFId}')">+ Frage speichern</button>
-                </div>
-
-                <div class="ai-code-box">
-                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div>
-                      <strong style="font-size:14px;">🤖 KI-Fragen direkt in „${escapeHtml(currentFolder.name)}“ einfügen (nur Admin)</strong>
-                      <div style="font-size:12px; color:var(--text-muted);">Füge ein JSON-Array oder ein einzelnes Frage-Objekt ein.</div>
-                    </div>
-                    <button class="btn-secondary" onclick="copyAiPromptForQuestions('${safeSubId}', '${safeFId}')">📋 Fragen-Prompt kopieren</button>
-                  </div>
-                  <textarea id="aiQuestionCodeArea" class="code-textarea" placeholder='[{"type":"mc","question":"Welche Aussage stimmt?","options":["A","B","C","D"],"correct":"A","explanation":"Begründung..."}]'></textarea>
-                  <button class="btn-primary" onclick="importAiQuestionCode('${safeSubId}', '${safeFId}')">⚡ Fragen-Code importieren</button>
-                  <div id="aiQuestionMsg"></div>
-                </div>
-              ` : ""}
-            ` : ""}
-          </div>
-        `;
       }
       else if (currentView === "settings") {
         heading.innerText = "⚙️ Einstellungen & Passwort";
-        const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+        const currentTheme = document.documentElement.getAttribute("data-theme");
         const currentAccent = (localStorage.getItem("lmg_accent") || "#2563eb").toLowerCase();
-        const colors = ["#2563eb", "#4f46e5", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6"];
+        const swatches = [
+          { hex: "#2563eb", label: "Blau" },
+          { hex: "#10b981", label: "Grün" },
+          { hex: "#f59e0b", label: "Amber" },
+          { hex: "#ef4444", label: "Rot" },
+          { hex: "#8b5cf6", label: "Violett" }
+        ];
 
         container.innerHTML = `
           <div class="card">
-            <h3 style="margin-bottom:4px;">🎨 Erscheinungsbild &amp; Design</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">Wähle Hell-/Dunkelmodus und deine Akzentfarbe.</p>
-
-            <div class="setting-row">
-              <div>
-                <div style="font-weight:700;">Farbmodus</div>
-                <div style="font-size:12.5px; color:var(--text-muted);">Zwischen hellem und dunklem Design wechseln</div>
-              </div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('light')">☀️ Hell</button>
-                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('dark')">🌙 Dunkel</button>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <div style="font-weight:700;">Akzentfarbe</div>
-                <div style="font-size:12.5px; color:var(--text-muted);">Farbe für Buttons, aktive Menüpunkte &amp; Badges</div>
-              </div>
-              <div style="display:flex; gap:10px; align-items:center;">
-                ${colors.map(c => `<div class="swatch ${currentAccent === c.toLowerCase() ? 'active' : ''}" style="background:${c};" onclick="setAccentColor('${c}')"></div>`).join("")}
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-bottom:4px;">🔐 Eigenes Passwort ändern</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Angemeldet als <strong>${escapeHtml(currentUser.name)}</strong> (${escapeHtml(currentUser.email)})</p>
+            <h3 style="margin-bottom:8px;">🔑 Eigenes Passwort ändern</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+              Hier kannst du dein persönliches Passwort jederzeit selbst aktualisieren.
+            </p>
             <div class="form-grid-2">
               <div>
-                <label style="font-size:13px; font-weight:600;">Neues Passwort</label>
-                <input type="password" id="settingsNewPwd1" class="input-field" placeholder="Mind. 4 Zeichen">
+                <label style="font-size:13px; font-weight:600;">Neues Passwort (mind. 4 Zeichen)</label>
+                <input type="password" id="settingsNewPwd1" class="input-field" placeholder="Neues Passwort...">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Neues Passwort bestätigen</label>
-                <input type="password" id="settingsNewPwd2" class="input-field" placeholder="Wiederholen">
+                <input type="password" id="settingsNewPwd2" class="input-field" placeholder="Wiederholen...">
               </div>
             </div>
-            <button class="btn-primary" onclick="changeOwnPasswordFromSettings()">Passwort aktualisieren</button>
+            <button class="btn-primary" onclick="changeOwnPasswordFromSettings()">💾 Neues Passwort speichern</button>
             <div id="settingsPwdMsg"></div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:8px;">Darstellung &amp; Design</h3>
+            <div class="setting-row">
+              <div>
+                <div style="font-weight:700;">Farbmodus (Light / Dark Mode)</div>
+                <div style="font-size:12px; color:var(--text-muted);">Wechsle zwischen hellem und dunklem Design.</div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('light')">☀️ Light</button>
+                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('dark')">🌙 Dark</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div style="font-weight:700;">Akzentfarbe</div>
+                <div style="font-size:12px; color:var(--text-muted);">Wähle die Hauptfarbe für Buttons und aktive Elemente.</div>
+              </div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                ${swatches.map(sw => `<div class="swatch ${currentAccent === sw.hex ? 'active' : ''}" style="background:${sw.hex};" title="${sw.label}" onclick="setAccentColor('${sw.hex}')"></div>`).join("")}
+              </div>
+            </div>
           </div>
         `;
       }
       else if (currentView === "admin") {
-        if (!isAdmin()) {
-          container.innerHTML = `<div class="card"><h3>Zugriff verweigert</h3><p>Nur Admins haben Zugriff auf diesen Bereich.</p></div>`;
-          return;
-        }
+        if (!isAdmin()) return;
         heading.innerText = "🛡️ Admin (Benutzer, Rollen & Kurse)";
-        const availableRoles = getAllAvailableRoles();
+        const allRoles = getAllAvailableRoles();
 
         container.innerHTML = `
           <div class="card">
             <h3 style="margin-bottom:4px;">➕ Neues Unterrichtsfach anlegen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Lege ein neues Fach an – es erscheint sofort in der Seitenleiste, auf der Startseite und in den Freigaben.
+              Lege ein neues Unterrichtsfach an – es erscheint sofort im Menü links (inkl. erstem Unterordner) und wird live synchronisiert.
             </p>
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Fachname *</label>
-                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Konstruktionslehre oder Physik" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
+                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Konstruktionslehre / CAD" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Icon / Emoji</label>
-                <input type="text" id="newSubjectIconInput" class="input-field" value="📘" maxlength="4">
+                <label style="font-size:13px; font-weight:600;">Symbol / Icon</label>
+                <input type="text" id="newSubjectIconInput" class="input-field" value="📘" placeholder="z. B. 🛠️, 📊, 📐">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Kategorie</label>
@@ -4767,465 +4522,754 @@
                   <option value="TECHNIK">TECHNIK</option>
                   <option value="HAUPTFACH">HAUPTFACH</option>
                   <option value="MATURA">MATURA</option>
-                  <option value="SONSTIGES">SONSTIGES</option>
+                  <option value="ALLGEMEIN">ALLGEMEIN</option>
                 </select>
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Erster Unterordner (optional)</label>
-                <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen" placeholder="z. B. Grundlagen">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Farbe</label>
-                <input type="color" id="newSubjectColorInput" class="input-field" style="height:42px; padding:4px;" value="#2563eb">
-              </div>
-              <div style="display:flex; align-items:center; padding-top:18px;">
-                <label class="user-check-label" style="width:100%; margin:0;">
-                  <input type="checkbox" id="newSubjectAccessAllInput" checked>
-                  <span>Für alle Benutzer freigeben</span>
-                </label>
+                <label style="font-size:13px; font-weight:600;">Erster Unterordner</label>
+                <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen" placeholder="Name des ersten Unterordners...">
               </div>
             </div>
-            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach erstellen</button>
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <label style="font-size:13px; font-weight:600;">Farbe:</label>
+                <input type="color" id="newSubjectColorInput" value="#2563eb" style="width:44px; height:36px; border:1px solid var(--border); border-radius:8px; background:var(--bg-input); cursor:pointer;">
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="newSubjectAccessAllInput" checked>
+                Für alle Benutzer freischalten
+              </label>
+            </div>
+            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Fach hinzufügen</button>
             <div id="newSubjectFeedback"></div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">🏷️ Rollen verwalten &amp; neue Rollen erstellen</h3>
+            <h3 style="margin-bottom:4px;">🎭 Rollenverwaltung (Standard- &amp; eigene Rollen)</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Erstelle eigene Rollen (z. B. „Moderator“, „Tutor“, „Gast“) und weise sie Benutzern zu.
+              Erstelle eigene Rollen (z. B. <em>Moderator</em>, <em>Tutor</em>, <em>Gast</em>), benenne sie um oder lösche sie.
             </p>
+
             <div class="form-grid-2" style="align-items:end;">
               <div>
-                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle</label>
-                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
+                <label style="font-size:13px; font-weight:600;">Name der neuen Rolle *</label>
+                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Tutor / Co-Admin" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
               </div>
               <div>
-                <label class="user-check-label" style="margin-bottom:0; height:42px;">
+                <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:13.5px; font-weight:600;">
                   <input type="checkbox" id="adminNewRoleIsAdmin">
-                  <span>Mit Admin-Rechten ausstatten</span>
+                  <span>Admin-Rechte (Kurse, Fragen &amp; Benutzer verwalten)</span>
                 </label>
               </div>
             </div>
-            <button type="button" class="btn-primary" style="margin-top:12px;" onclick="adminCreateCustomRole()">+ Rolle anlegen</button>
+            <button type="button" class="btn-primary" style="margin-top:12px;" onclick="adminCreateCustomRole()">+ Rolle erstellen</button>
 
             <div style="margin-top:16px;">
-              <div style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">Vorhandene Rollen (${availableRoles.length}):</div>
-              <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                ${availableRoles.map(r => {
-                  const safeR = escapeJsSingle(r.name);
-                  return `
-                    <div class="profile-box" style="padding:8px 12px; gap:8px;">
-                      <span class="role-badge">${escapeHtml(r.name)}</span>
-                      <span style="font-size:11.5px; color:var(--text-muted);">${r.isAdminRole ? "Admin-Rechte" : (r.builtIn ? "Standardrolle" : "Benutzerdefiniert")}</span>
-                      ${!r.builtIn ? `
-                        <button type="button" class="btn-secondary" style="padding:3px 8px; font-size:11.5px;" onclick="adminRenameCustomRole('${safeR}')">Umbenennen</button>
-                        <button type="button" class="btn-danger" style="padding:3px 8px; font-size:11.5px;" onclick="adminDeleteCustomRole('${safeR}')">✕</button>
-                      ` : ""}
-                    </div>
-                  `;
-                }).join("")}
-              </div>
+              ${allRoles.map(r => `
+                <div class="setting-row">
+                  <div>
+                    <strong>${escapeHtml(r.name)}</strong>
+                    ${r.builtIn
+                      ? `<span class="count-pill" style="margin-left:6px;">Standardrolle</span>`
+                      : `<span class="days-badge" style="margin-left:6px; padding:2px 8px; font-size:11px;">Eigene Rolle</span>`
+                    }
+                    ${r.isAdminRole ? `<span class="role-badge" style="margin-left:6px;">Admin-Rechte</span>` : ""}
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    ${!r.builtIn ? `
+                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminRenameCustomRole('${escapeJsSingle(r.name)}')">✏️ Umbenennen</button>
+                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${escapeJsSingle(r.name)}')">Löschen</button>
+                    ` : `<span style="font-size:12px; color:var(--text-muted);">Systemrolle</span>`}
+                  </div>
+                </div>
+              `).join("")}
             </div>
           </div>
 
           <div class="card">
             <h3 style="margin-bottom:4px;">👥 Benutzer &amp; Initialpasswörter verwalten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Lege neue Benutzer mit einem Initialpasswort an. Beim ersten Login müssen sie ihr eigenes Passwort vergeben.
+              Lege neue Benutzer mit Initialpasswort an (beim ersten Login mit Invite-Code wird ein eigenes Passwort erzwungen) oder setze Passwörter zurück.
             </p>
             <div class="form-grid-2">
               <div>
-                <label style="font-size:13px; font-weight:600;">Name</label>
-                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna S.">
+                <label style="font-size:13px; font-weight:600;">Name *</label>
+                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna M.">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
-                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@beispiel.at">
+                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@lernen-mit-gerry.at">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code</label>
+                <label style="font-size:13px; font-weight:600;">Initialpasswort / Code *</label>
                 <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Rolle</label>
                 <select id="adminNewUserRole" class="select-field">
-                  ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join("")}
+                  ${allRoles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join("")}
                 </select>
               </div>
             </div>
             <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer anlegen</button>
 
             <div style="margin-top:18px;">
-              ${users.map(u => {
-                const safeUId = Number(u.id);
-                return `
-                  <div class="setting-row">
-                    <div>
-                      <strong>${escapeHtml(u.name)}</strong> <span class="role-badge">${escapeHtml(u.role)}</span>
-                      <div style="font-size:12px; color:var(--text-muted);">
-                        ${escapeHtml(u.email)} • ${u.points || 0} Pkt • ${u.streak || 0}d 🔥 •
-                        ${u.mustChangePassword ? `<span style="color:#d97706; font-weight:700;">Initialpasswort aktiv: <code>${escapeHtml(u.password)}</code></span>` : `<span style="color:#10b981; font-weight:600;">Eigenes Passwort gesetzt</span>`}
-                      </div>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                      <select aria-label="Rolle für ${escapeHtml(u.name)}" class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${safeUId}, this.value)">
-                        ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join("")}
-                      </select>
-                      <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${safeUId})">🔑 Initial-PW setzen</button>
-                      ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${safeUId})">Löschen</button>` : `<span style="font-size:12px; color:var(--text-muted);">Aktiv</span>`}
+              ${users.map(u => `
+                <div class="setting-row">
+                  <div>
+                    <strong>${escapeHtml(u.name)}</strong> <span class="role-badge">${escapeHtml(u.role)}</span>
+                    <div style="font-size:12px; color:var(--text-muted);">
+                      ${escapeHtml(u.email)} · Punkte: <strong>${u.points || 0} Pkt</strong> · Streak: <strong>${u.streak || 0}d 🔥</strong> · Code/Passwort: <code>${escapeHtml(u.password)}</code>
+                      ${u.mustChangePassword ? ' · <span style="color:#d97706; font-weight:700;">Muss Passwort ändern</span>' : ' · <span style="color:#10b981;">Eigenes Passwort aktiv</span>'}
                     </div>
                   </div>
-                `;
-              }).join("")}
-            </div>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachfreigaben verwalten</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Wähle ein Fach aus, um festzulegen, welche Benutzer darauf Zugriff haben.</p>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
-              ${subjects.map(s => `
-                <button class="btn-secondary" style="${editingSubjectId === s.id ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="selectSubjectForPermissions('${escapeJsSingle(s.id)}')">
-                  ${escapeHtml(s.icon)} ${escapeHtml(s.name)} (${s.accessAll ? 'Alle' : (s.allowedUsers || []).length + ' Benutzer'})
-                </button>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${Number(u.id)}, this.value)">
+                      ${allRoles.map(r => `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join("")}
+                    </select>
+                    <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${Number(u.id)})">🔑 Passwort neu</button>
+                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${Number(u.id)})">Entfernen</button>` : `<span style="font-size:12px; color:var(--text-muted);">Aktiv</span>`}
+                  </div>
+                </div>
               `).join("")}
             </div>
-            <div id="permissionEditorBox"></div>
           </div>
 
           <div class="card">
             <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Pflege hier die Angaben für den Menüpunkt <strong>Impressum</strong>. Änderungen werden live gespeichert und synchronisiert.
+              Passe die Anbieterkennzeichnung und rechtlichen Hinweise im Impressum an.
             </p>
             <div class="form-grid-2">
               <div>
-                <label style="font-size:13px; font-weight:600;">Betreiber / Projektname</label>
-                <input type="text" id="adminImpOperator" class="input-field" value="${escapeHtml(imprintData.operatorName)}">
+                <label style="font-size:13px; font-weight:600;">Betreiber / Projekt</label>
+                <input type="text" id="adminImpOperator" class="input-field" value="${escapeHtml(imprintData.operatorName || '')}">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Kontakt-E-Mail</label>
-                <input type="text" id="adminImpEmail" class="input-field" value="${escapeHtml(imprintData.email)}">
+                <input type="text" id="adminImpEmail" class="input-field" value="${escapeHtml(imprintData.email || '')}">
               </div>
             </div>
             <label style="font-size:13px; font-weight:600;">Standort / Anschrift</label>
-            <input type="text" id="adminImpAddress" class="input-field" value="${escapeHtml(imprintData.address)}">
+            <input type="text" id="adminImpAddress" class="input-field" value="${escapeHtml(imprintData.address || '')}">
 
             <label style="font-size:13px; font-weight:600;">Zweck des Angebots</label>
-            <textarea id="adminImpRole" class="textarea-field">${escapeHtml(imprintData.websiteRole)}</textarea>
+            <textarea id="adminImpRole" class="textarea-field">${escapeHtml(imprintData.websiteRole || '')}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
-            <textarea id="adminImpDisclaimer" class="textarea-field">${escapeHtml(imprintData.disclaimer)}</textarea>
+            <textarea id="adminImpDisclaimer" class="textarea-field">${escapeHtml(imprintData.disclaimer || '')}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Datenschutzhinweis</label>
-            <textarea id="adminImpPrivacy" class="textarea-field">${escapeHtml(imprintData.privacyNote)}</textarea>
+            <textarea id="adminImpPrivacy" class="textarea-field">${escapeHtml(imprintData.privacyNote || '')}</textarea>
 
             <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
             <div id="adminImprintSavedMsg"></div>
           </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:8px;">Kurs- &amp; Fachberechtigungen</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Wähle ein Fach aus, um festzulegen, ob alle oder nur bestimmte Benutzer Zugriff haben.</p>
+            ${subjects.map(s => {
+              const allowedCount = s.accessAll ? users.length : (s.allowedUsers || []).length;
+              const safeSubId = escapeJsSingle(s.id);
+              return `
+                <div class="setting-row">
+                  <div>
+                    <strong>${escapeHtml(s.icon)} ${escapeHtml(s.name)}</strong>
+                    <div style="font-size:12px; color:var(--text-muted);">${s.accessAll ? 'Alle Benutzer (Standard)' : `Eingeschränkt (${allowedCount} Benutzer)`}</div>
+                  </div>
+                  <div style="display:flex; gap:8px;">
+                    <button class="btn-secondary" onclick="openAccessModal('${safeSubId}')">Berechtigungen</button>
+                    <button class="btn-danger" onclick="adminDeleteSubject('${safeSubId}')">Fach löschen</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+
+            ${editingSubjectId ? renderInlineAccessEditor() : ""}
+          </div>
         `;
-        if (editingSubjectId) renderPermissionEditor();
+      }
+      else if (currentView.startsWith("subject-")) {
+        const subId = currentView.replace("subject-", "");
+        const sub = visible.find(s => s.id === subId);
+        if (!sub) return;
+        if (!Array.isArray(sub.folders)) sub.folders = [];
+        heading.innerText = `${sub.icon} ${sub.name}`;
+
+        if (!activeFolderId && sub.folders.length > 0) {
+          activeFolderId = sub.folders[0].id;
+        }
+        if (activeFolderId && !sub.folders.some(f => f.id === activeFolderId)) {
+          activeFolderId = sub.folders.length > 0 ? sub.folders[0].id : null;
+        }
+
+        const currentFolder = sub.folders.find(f => f.id === activeFolderId) || null;
+        const safeSubId = escapeJsSingle(sub.id);
+
+        container.innerHTML = `
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+              <div>
+                <span class="count-pill">${escapeHtml(sub.category)}</span>
+                <h3 style="margin-top:6px;">${escapeHtml(sub.icon)} ${escapeHtml(sub.name)} – Unterordner</h3>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button class="btn-secondary" onclick="toggleFavoriteSubject('${safeSubId}')">
+                  ${sub.favorite ? '⭐ Favorit (aktiv)' : '☆ Als Favorit'}
+                </button>
+                ${isAdmin() ? `
+                  <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:195px;" placeholder="Neuer Unterordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createNewFolder('${safeSubId}');}">
+                  <button type="button" class="btn-primary" onclick="createNewFolder('${safeSubId}')">+ Ordner</button>
+                ` : ""}
+              </div>
+            </div>
+
+            <div class="tab-strip">
+              ${sub.folders.map(f => {
+                const safeFolderId = escapeJsSingle(f.id);
+                const qCount = Array.isArray(f.questions) ? f.questions.length : 0;
+                return `
+                  <span style="display:inline-flex; align-items:center; gap:4px;">
+                    <button type="button" class="btn-secondary" style="${f.id === activeFolderId ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeFolderId='${safeFolderId}'; showArchivedMastered=false; revealedFlashcards.clear(); renderView();">
+                      📁 ${escapeHtml(f.name)} (${qCount})
+                    </button>
+                    ${isAdmin() ? `<button type="button" class="btn-danger" style="padding:5px 8px;" title="Unterordner löschen" onclick="deleteFolder('${safeSubId}', '${safeFolderId}')">✕</button>` : ""}
+                  </span>
+                `;
+              }).join("")}
+            </div>
+
+            ${currentFolder ? renderFolderQuestions(sub, currentFolder) : `<p style="color:var(--text-muted); font-size:14px;">Noch kein Unterordner vorhanden.${isAdmin() ? ' Lege oben rechts einen neuen Unterordner an.' : ''}</p>`}
+          </div>
+        `;
       }
 
       typesetMath(container);
     }
 
-    function toggleNewQFields() {
-      const t = document.getElementById("newQType")?.value;
-      const mcBox = document.getElementById("newQMcFields");
-      const calcBox = document.getElementById("newQCalcFields");
-      if (mcBox) mcBox.style.display = t === "mc" ? "block" : "none";
-      if (calcBox) calcBox.style.display = t === "calc" ? "block" : "none";
+    function renderFolderQuestions(sub, folder) {
+      const safeSubId = escapeJsSingle(sub.id);
+      const safeFolderId = escapeJsSingle(folder.id);
+      const allQuestions = Array.isArray(folder.questions) ? folder.questions : [];
+
+      const archivedQuestions = allQuestions.filter(q => isQuestionArchived(sub.id, folder.id, q.id));
+      const activeQuestions = allQuestions.filter(q => !isQuestionArchived(sub.id, folder.id, q.id));
+      const displayedQuestions = showArchivedMastered ? archivedQuestions : activeQuestions;
+
+      const modeSwitchHtml = `
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button"
+                    class="btn-secondary"
+                    style="${folderPracticeMode === 'questions' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
+                    onclick="folderPracticeMode='questions'; renderView();">
+              📝 Fragen (${activeQuestions.length} aktiv)
+            </button>
+            <button type="button"
+                    class="btn-secondary"
+                    style="${folderPracticeMode === 'flashcards' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
+                    onclick="folderPracticeMode='flashcards'; revealedFlashcards.clear(); renderView();">
+              🃏 Karteikarten (${activeQuestions.length} aktiv)
+            </button>
+            <button type="button"
+                    class="btn-secondary"
+                    style="${showArchivedMastered ? 'border-color:#10b981; color:#10b981; font-weight:700;' : ''}"
+                    onclick="showArchivedMastered = !showArchivedMastered; renderView();">
+              ${showArchivedMastered ? `← Aktive anzeigen (${activeQuestions.length})` : `✅ Abgelegt (${archivedQuestions.length})`}
+            </button>
+          </div>
+          <span style="font-size:12px; color:var(--text-muted);">
+            Nach <strong>${MASTERY_THRESHOLD}× richtig</strong> wird eine Frage/Karteikarte automatisch abgelegt.
+          </span>
+        </div>
+      `;
+
+      let contentHtml = "";
+
+      if (folderPracticeMode === "flashcards") {
+        contentHtml = displayedQuestions.length === 0
+          ? `<p style="color:var(--text-muted); font-size:14px; margin-bottom:14px;">${showArchivedMastered ? "Noch keine abgelegten Karteikarten in diesem Ordner." : "Alle Karteikarten in diesem Ordner wurden bereits gemeistert und abgelegt!"}</p>`
+          : displayedQuestions.map((q, idx) => {
+              const card = buildFlashcardForQuestion(q);
+              const isRevealed = revealedFlashcards.has(q.id);
+              const count = getQuestionCorrectCount(sub.id, folder.id, q.id);
+              const safeQId = escapeJsSingle(q.id);
+
+              return `
+                <div class="flashcard-box">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                    <span class="flashcard-side-label">Karteikarte ${idx + 1} · Vorderseite</span>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                      <span class="count-pill">${count} / ${MASTERY_THRESHOLD}× richtig</span>
+                      ${showArchivedMastered ? `<button type="button" class="btn-secondary" style="padding:4px 9px; font-size:11.5px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">↩ Wieder aktivieren</button>` : ""}
+                    </div>
+                  </div>
+
+                  <div style="font-weight:700; font-size:15.5px; line-height:1.45;">${escapeHtml(card.front)}</div>
+
+                  ${isRevealed ? `
+                    <div class="flashcard-answer-panel">
+                      <div class="flashcard-side-label" style="color:#10b981;">Rückseite / Lösung</div>
+                      <div style="font-size:14px; line-height:1.5;">${escapeHtml(card.back)}</div>
+                    </div>
+                  ` : ""}
+
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+                    <button type="button" class="btn-secondary" onclick="toggleFlashcardReveal('${safeQId}')">
+                      ${isRevealed ? "🙈 Rückseite verbergen" : "👁️ Lösung umdrehen"}
+                    </button>
+                    ${!showArchivedMastered ? `
+                      <button type="button" class="btn-primary" onclick="rateFlashcard('${safeSubId}', '${safeFolderId}', '${safeQId}', true)">
+                        ✅ Gewusst (+1)
+                      </button>
+                      <button type="button" class="btn-secondary" onclick="rateFlashcard('${safeSubId}', '${safeFolderId}', '${safeQId}', false)">
+                        ❌ Noch üben
+                      </button>
+                    ` : ""}
+                  </div>
+                </div>
+              `;
+            }).join("");
+      } else {
+        contentHtml = displayedQuestions.length === 0
+          ? `<p style="color:var(--text-muted); font-size:14px; margin-bottom:14px;">${showArchivedMastered ? "Noch keine abgelegten Fragen in diesem Ordner." : "Alle Fragen in diesem Ordner wurden bereits gemeistert und abgelegt!"}</p>`
+          : displayedQuestions.map((q, idx) => {
+              const count = getQuestionCorrectCount(sub.id, folder.id, q.id);
+              const safeQId = escapeJsSingle(q.id);
+              const safeExpl = escapeJsSingle(q.explanation);
+
+              const badgeRow = `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                  <span class="${count >= MASTERY_THRESHOLD ? 'mastered-badge' : 'count-pill'}">${count >= MASTERY_THRESHOLD ? `✅ Abgelegt (${count}/${MASTERY_THRESHOLD}×)` : `${count} / ${MASTERY_THRESHOLD}× richtig`}</span>
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    ${showArchivedMastered ? `<button type="button" class="btn-secondary" style="padding:4px 9px; font-size:11.5px;" onclick="resetQuestionMastery('${safeSubId}', '${safeFolderId}', '${safeQId}')">↩ Wieder aktivieren</button>` : ""}
+                    ${isAdmin() ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${safeSubId}', '${safeFolderId}', '${safeQId}')">Löschen</button>` : ""}
+                  </div>
+                </div>
+              `;
+
+              if (q.type === "mc") {
+                const safeCorr = escapeJsSingle(q.correct);
+                return `
+                  <div class="question-card">
+                    ${badgeRow}
+                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
+                    <div style="margin-top:8px;">
+                      ${q.options.map(opt => `
+                        <div class="mc-option" onclick="checkMcQuestion('${safeSubId}', '${safeFolderId}', '${safeQId}', '${escapeJsSingle(opt)}', '${safeCorr}', '${safeExpl}')">
+                          <span>🔘</span> <span>${escapeHtml(opt)}</span>
+                        </div>
+                      `).join("")}
+                    </div>
+                    <div id="fb-${escapeHtml(q.id)}"></div>
+                  </div>
+                `;
+              } else {
+                const safeAns = escapeJsSingle(q.answer);
+                const inputId = `ans-${escapeHtml(q.id)}`;
+                return `
+                  <div class="question-card">
+                    ${badgeRow}
+                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                      <input type="text" id="${inputId}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
+                      <button class="btn-primary" onclick="checkFolderQuestion('${safeSubId}', '${safeFolderId}', '${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeAns}', '${safeExpl}')">Prüfen</button>
+                    </div>
+                    <div id="fb-${escapeHtml(q.id)}"></div>
+                  </div>
+                `;
+              }
+            }).join("");
+      }
+
+      const adminCreatorHtml = isAdmin() ? `
+        <div class="card" style="margin-top:16px; background:var(--bg-input);">
+          <h4 style="margin-bottom:10px;">➕ Neue Frage in „${escapeHtml(folder.name)}“ anlegen (inkl. Karteikarte)</h4>
+          <div class="form-grid-2">
+            <div>
+              <label style="font-size:12px; font-weight:600;">Fragetyp</label>
+              <select id="newQType" class="select-field" onchange="toggleNewQuestionFields()">
+                <option value="mc">Multiple-Choice</option>
+                <option value="calc">Rechen- / Kurzantwortfrage</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:600;">Erklärung / Lösungshinweis</label>
+              <input type="text" id="newQExpl" class="input-field" placeholder="Kurze Erklärung...">
+            </div>
+          </div>
+
+          <label style="font-size:12px; font-weight:600;">Fragestellung (auch Karteikarten-Vorderseite)</label>
+          <input type="text" id="newQText" class="input-field" placeholder="Frage eingeben...">
+
+          <div id="mcFields">
+            <div class="form-grid-2">
+              <input type="text" id="newQOpt1" class="input-field" placeholder="Antwortmöglichkeit 1">
+              <input type="text" id="newQOpt2" class="input-field" placeholder="Antwortmöglichkeit 2">
+              <input type="text" id="newQOpt3" class="input-field" placeholder="Antwortmöglichkeit 3 (optional)">
+              <input type="text" id="newQOpt4" class="input-field" placeholder="Antwortmöglichkeit 4 (optional)">
+            </div>
+            <label style="font-size:12px; font-weight:600;">Welche Option ist richtig?</label>
+            <select id="newQCorrectIdx" class="select-field">
+              <option value="0">Option 1</option>
+              <option value="1">Option 2</option>
+              <option value="2">Option 3</option>
+              <option value="3">Option 4</option>
+            </select>
+          </div>
+
+          <div id="calcFields" style="display:none;">
+            <label style="font-size:12px; font-weight:600;">Richtige Antwort (Zahl oder Text)</label>
+            <input type="text" id="newQCalcAns" class="input-field" placeholder="z. B. 42 oder Martensit">
+          </div>
+
+          <button class="btn-primary" onclick="addQuestionToFolder('${safeSubId}', '${safeFolderId}')">Frage speichern</button>
+        </div>
+
+        <div class="ai-code-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <strong style="font-size:14px;">🤖 KI-Fragen-Code für „${escapeHtml(folder.name)}“ einfügen (nur Admin)</strong>
+              <div style="font-size:12px; color:var(--text-muted);">Kopiere den Prompt, lass dir Fragen + Karteikarten als JSON-Array von der KI erstellen und füge den Code hier ein.</div>
+            </div>
+            <button type="button" class="btn-secondary" onclick="copyAiPromptForQuestions('${safeSubId}', '${safeFolderId}')">📋 KI-Prompt kopieren</button>
+          </div>
+          <textarea id="aiQuestionCodeArea" class="code-textarea" placeholder='[{"type":"mc","question":"Welche Aussage stimmt?","options":["A","B","C","D"],"correct":"A","explanation":"Begründung...","flashcard":{"front":"Vorderseite","back":"Rückseite"}}]'></textarea>
+          <button type="button" class="btn-primary" onclick="importAiQuestionCode('${safeSubId}', '${safeFolderId}')">📥 KI-Fragen in Ordner importieren</button>
+          <div id="aiQuestionMsg"></div>
+        </div>
+      ` : "";
+
+      return modeSwitchHtml + contentHtml + adminCreatorHtml;
+    }
+
+    function toggleNewQuestionFields() {
+      const t = document.getElementById("newQType").value;
+      document.getElementById("mcFields").style.display = t === "mc" ? "block" : "none";
+      document.getElementById("calcFields").style.display = t === "calc" ? "block" : "none";
+    }
+
+    function extractJsonPayload(rawText) {
+      let clean = String(rawText || "").trim();
+      const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fenceMatch && fenceMatch[1]) {
+        clean = fenceMatch[1].trim();
+      }
+      return JSON.parse(clean);
     }
 
     function copyAiPromptForQuestions(subId, folderId) {
       const sub = subjects.find(s => s.id === subId);
       const folder = sub?.folders?.find(f => f.id === folderId);
-      const promptText = `Erstelle 5 Lernfragen für das Fach "${sub?.name || "Fach"}" und den Unterordner "${folder?.name || "Thema"}".
-Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Array ohne Markdown-Codeblöcke im folgenden Format:
-[
-  {
-    "type": "mc",
-    "question": "Fragetext?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correct": "Option A",
-    "explanation": "Kurze Erklärung."
-  },
-  {
-    "type": "calc",
-    "question": "Rechenfrage mit Zahlenwerten?",
-    "answer": "42",
-    "explanation": "Rechenweg."
+      const promptText = `Erstelle 5 Lernfragen (Mix aus Multiple-Choice "mc" und Rechen-/Kurzantwortfragen "calc") zum Fach "${sub?.name || "Fach"}" und Unterordner "${folder?.name || "Thema"}".
+Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Array ohne zusätzlichen Text davor oder danach.
+Jedes Element soll exakt diese Struktur haben:
+{
+  "type": "mc",
+  "question": "Fragetext (gerne mit $LaTeX$)",
+  "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+  "correct": "Option 1",
+  "explanation": "Kurze Erklärung",
+  "flashcard": {
+    "front": "Karteikarten-Vorderseite",
+    "back": "Karteikarten-Rückseite"
   }
-]`;
-      navigator.clipboard?.writeText(promptText).then(() => {
-        alert("📋 Fragen-Prompt in die Zwischenablage kopiert! Jetzt bei der KI einfügen.");
-      }).catch(() => {
-        prompt("Kopiere diesen Prompt für deine KI:", promptText);
-      });
+}
+Für "calc"-Fragen verwende statt "options"/"correct" das Feld "answer": "Ergebnis".`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(promptText).catch(() => {});
+      }
+      const area = document.getElementById("aiQuestionCodeArea");
+      if (area && !area.value.trim()) {
+        area.value = promptText;
+      }
+      const msgEl = document.getElementById("aiQuestionMsg");
+      if (msgEl) {
+        msgEl.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt wurde in die Zwischenablage kopiert!</div>`;
+      }
     }
 
     function importAiQuestionCode(subId, folderId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
+      if (!isAdmin()) return alert("Nur Admins dürfen KI-Fragen importieren.");
       const sub = subjects.find(s => s.id === subId);
       const folder = sub?.folders?.find(f => f.id === folderId);
-      const msgBox = document.getElementById("aiQuestionMsg");
-      const raw = (document.getElementById("aiQuestionCodeArea")?.value || "").trim()
-        .replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+      const msgEl = document.getElementById("aiQuestionMsg");
+      const raw = document.getElementById("aiQuestionCodeArea")?.value.trim() || "";
 
+      if (!sub || !folder) return;
       if (!raw) {
-        if (msgBox) msgBox.innerHTML = `<div class="result-banner result-err">Bitte zuerst KI-Code in das Textfeld einfügen.</div>`;
+        if (msgEl) msgEl.innerHTML = `<div class="result-banner result-err">❌ Bitte zuerst JSON-Code einfügen.</div>`;
         return;
       }
 
       try {
-        const parsed = JSON.parse(raw);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
+        const parsed = extractJsonPayload(raw);
+        const list = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? [parsed] : null);
+        if (!list || list.length === 0) {
+          throw new Error("Kein gültiges Fragen-Array gefunden.");
+        }
+
+        if (!Array.isArray(folder.questions)) folder.questions = [];
         let added = 0;
 
-        list.forEach((item, idx) => {
+        list.forEach((item, i) => {
           if (!item || !item.question) return;
-          const isMc = item.type === "mc" || Array.isArray(item.options);
-          if (isMc) {
-            const opts = Array.isArray(item.options) && item.options.length >= 2 ? item.options : ["Ja", "Nein"];
-            const corr = item.correct && opts.includes(item.correct) ? item.correct : opts[0];
-            const expl = item.explanation || "Keine Erklärung hinterlegt.";
+          const qType = item.type === "calc" ? "calc" : "mc";
+          const qText = String(item.question).trim();
+          const expl = String(item.explanation || "Keine Erklärung hinterlegt.").trim();
+          const id = "q-ai-" + Date.now() + "-" + i;
+
+          if (qType === "mc") {
+            const opts = Array.isArray(item.options) && item.options.length >= 2
+              ? item.options.map(o => String(o))
+              : ["Richtig", "Falsch"];
+            const corr = item.correct ? String(item.correct) : opts[0];
+            const fc = item.flashcard && item.flashcard.front
+              ? { front: String(item.flashcard.front), back: String(item.flashcard.back || corr) }
+              : { front: qText, back: `${corr} — ${expl}` };
+
             folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
+              id,
               type: "mc",
-              question: String(item.question),
-              options: opts.map(String),
-              correct: String(corr),
-              explanation: String(expl),
-              flashcard: {
-                front: String(item.question),
-                back: `${String(corr)} — ${String(expl)}`
-              }
+              question: qText,
+              options: opts,
+              correct: corr,
+              explanation: expl,
+              flashcard: fc
             });
             added++;
-          } else if (item.answer !== undefined) {
-            const ansStr = String(item.answer);
-            const expl = item.explanation || "Keine Erklärung hinterlegt.";
+          } else {
+            const ans = String(item.answer ?? item.correct ?? "").trim();
+            if (!ans) return;
+            const fc = item.flashcard && item.flashcard.front
+              ? { front: String(item.flashcard.front), back: String(item.flashcard.back || ans) }
+              : { front: qText, back: `${ans} — ${expl}` };
+
             folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
+              id,
               type: "calc",
-              question: String(item.question),
-              answer: ansStr,
-              explanation: String(expl),
-              flashcard: {
-                front: String(item.question),
-                back: `${ansStr} — ${String(expl)}`
-              }
+              question: qText,
+              answer: ans,
+              explanation: expl,
+              flashcard: fc
             });
             added++;
           }
         });
 
-        if (added === 0) throw new Error("Keine gültigen Frage-Objekte erkannt.");
+        if (added === 0) {
+          throw new Error("Keine verwertbaren Fragen im JSON enthalten.");
+        }
+
         saveSubjects();
         renderSidebar();
         renderView();
-        const afterBox = document.getElementById("aiQuestionMsg");
-        if (afterBox) afterBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${escapeHtml(folder.name)}“ eingefügt!</div>`;
+
+        const afterMsg = document.getElementById("aiQuestionMsg");
+        if (afterMsg) {
+          afterMsg.innerHTML = `<div class="result-banner result-ok">✅ ${added} KI-Frage(n) in „${escapeHtml(folder.name)}“ importiert!</div>`;
+        }
       } catch (err) {
-        if (msgBox) msgBox.innerHTML = `<div class="result-banner result-err">❌ Ungültiger Code: ${escapeHtml(err.message)}</div>`;
+        if (msgEl) {
+          msgEl.innerHTML = `<div class="result-banner result-err">❌ Ungültiger Code: ${escapeHtml(err.message)}</div>`;
+        }
       }
     }
 
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [
-      {
-        id: "cf-torque-default",
-        title: "Drehmoment",
-        category: "Mechanik",
-        formula: "M = F \\cdot l",
-        description: "Das Drehmoment beschreibt die Drehbewegung eines Körpers um einen Drehpunkt bei senkrecht angreifender Kraft.",
-        variables: [
-          { symbol: "M", meaning: "Drehmoment in Newtonmeter ($\\text{Nm}$)" },
-          { symbol: "F", meaning: "Kraft in Newton ($\\text{N}$)" },
-          { symbol: "l", meaning: "Hebelarm in Meter ($\\text{m}$)" }
-        ],
-        var1Label: "Kraft F [N]",
-        var1Default: 250,
-        var2Label: "Hebelarm l [m]",
-        var2Default: 0.4,
-        formulaType: "mul"
-      }
-    ];
+    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
     function saveCustomFormulas() {
       localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
       queueCloudSync();
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine Lernformel mit Erklärung, Variablentabelle und Rechner-Daten.
-Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Objekt ohne Markdown-Codeblöcke im folgenden Format:
+      const promptText = `Erstelle eine Lernformel mit interaktivem Rechner im JSON-Format.
+Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Objekt ohne zusätzlichen Text davor oder danach:
 {
   "title": "Name der Formel",
-  "category": "z. B. Mechanik oder Fertigungstechnik",
-  "formula": "Latex-Formel ohne $$",
-  "description": "Kurze, klare Erklärung wofür die Formel verwendet wird.",
+  "category": "Mechanik",
+  "formula": "M = F \\\\cdot l",
+  "description": "Kurze verständliche Erklärung der Formel.",
   "variables": [
-    { "symbol": "x", "meaning": "Bedeutung & Einheit in LaTeX z. B. Weg in \\\\text{m}" }
+    { "symbol": "M", "meaning": "Drehmoment in Nm" },
+    { "symbol": "F", "meaning": "Kraft in N" },
+    { "symbol": "l", "meaning": "Hebelarm in m" }
   ],
-  "var1Label": "Variable 1 [Einheit]",
-  "var1Default": 10,
-  "var2Label": "Variable 2 [Einheit]",
-  "var2Default": 2,
-  "formulaType": "mul"
-}
-Erlaubte formulaType-Werte: "mul" (var1 * var2), "div" (var1 / var2), "add" (var1 + var2).`;
-      navigator.clipboard?.writeText(promptText).then(() => {
-        alert("📋 Formel-Prompt in die Zwischenablage kopiert!");
-      }).catch(() => {
-        prompt("Kopiere diesen Prompt für deine KI:", promptText);
-      });
+  "var1Label": "Kraft F [N]",
+  "var1Default": 250,
+  "var2Label": "Hebel l [m]",
+  "var2Default": 0.4,
+  "calcExpr": "v1 * v2",
+  "unit": "Nm"
+}`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(promptText).catch(() => {});
+      }
+      const area = document.getElementById("aiFormulaCodeArea");
+      if (area && !area.value.trim()) {
+        area.value = promptText;
+      }
+      const msgEl = document.getElementById("aiFormulaMsg");
+      if (msgEl) {
+        msgEl.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt wurde in die Zwischenablage kopiert!</div>`;
+      }
     }
 
     function importAiFormulaCode() {
       if (!isAdmin()) return alert("Nur Admins dürfen Formeln importieren.");
-      const msgBox = document.getElementById("aiFormulaMsg");
-      const raw = (document.getElementById("aiFormulaCodeArea")?.value || "").trim()
-        .replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+      const msgEl = document.getElementById("aiFormulaMsg");
+      const raw = document.getElementById("aiFormulaCodeArea")?.value.trim() || "";
 
       if (!raw) {
-        if (msgBox) msgBox.innerHTML = `<div class="result-banner result-err">Bitte zuerst KI-Code in das Textfeld einfügen.</div>`;
+        if (msgEl) msgEl.innerHTML = `<div class="result-banner result-err">❌ Bitte zuerst Formel-JSON einfügen.</div>`;
         return;
       }
 
       try {
-        const parsed = JSON.parse(raw);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
-        let added = 0;
+        const parsed = extractJsonPayload(raw);
+        const list = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? [parsed] : null);
+        if (!list || list.length === 0) throw new Error("Kein gültiges Formel-Objekt gefunden.");
 
-        list.forEach((f, idx) => {
-          if (!f || !f.title || !f.formula) return;
-          const catName = String(f.category || "KI-Formel").trim() || "KI-Formel";
-          if (!customFormulaFolders.some(ff => ff.name.toLowerCase() === catName.toLowerCase())) {
-            customFormulaFolders.push({
-              id: "ff-" + Date.now() + "-" + idx,
-              name: catName
-            });
-            saveCustomFormulaFolders();
+        let added = 0;
+        list.forEach((obj, idx) => {
+          if (!obj || !obj.title || !obj.formula) return;
+          const catName = String(obj.category || "Allgemein").trim();
+          const builtInCats = ["zerspanung", "elektrotechnik", "algebra"];
+          if (!builtInCats.includes(catName.toLowerCase())) {
+            const existsFolder = customFormulaFolders.find(f => f.name.toLowerCase() === catName.toLowerCase());
+            if (!existsFolder) {
+              customFormulaFolders.push({ id: "ff-" + Date.now() + "-" + idx, name: catName });
+              saveCustomFormulaFolders();
+            }
           }
+
           customFormulas.push({
             id: "cf-" + Date.now() + "-" + idx,
-            title: String(f.title),
+            title: String(obj.title).trim(),
             category: catName,
-            formula: String(f.formula),
-            description: String(f.description || ""),
-            variables: Array.isArray(f.variables) ? f.variables : [],
-            var1Label: String(f.var1Label || "Wert 1"),
-            var1Default: Number(f.var1Default ?? 10),
-            var2Label: String(f.var2Label || "Wert 2"),
-            var2Default: Number(f.var2Default ?? 2),
-            formulaType: ["mul", "div", "add"].includes(f.formulaType) ? f.formulaType : "mul"
+            formula: String(obj.formula).trim(),
+            description: String(obj.description || "").trim(),
+            variables: Array.isArray(obj.variables) ? obj.variables : [],
+            var1Label: String(obj.var1Label || "Wert 1").trim(),
+            var1Default: Number(obj.var1Default) || 10,
+            var2Label: String(obj.var2Label || "Wert 2").trim(),
+            var2Default: Number(obj.var2Default) || 5,
+            calcExpr: String(obj.calcExpr || "v1 + v2").trim(),
+            unit: String(obj.unit || "").trim()
           });
           added++;
         });
 
         if (added === 0) throw new Error("Titel oder Formel fehlt im JSON.");
+
         saveCustomFormulas();
         renderSidebar();
         renderView();
-        const afterBox = document.getElementById("aiFormulaMsg");
-        if (afterBox) afterBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) erfolgreich hinzugefügt!</div>`;
+
+        const afterMsg = document.getElementById("aiFormulaMsg");
+        if (afterMsg) {
+          afterMsg.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) erfolgreich hinzugefügt!</div>`;
+        }
       } catch (err) {
-        if (msgBox) msgBox.innerHTML = `<div class="result-banner result-err">❌ Ungültiger Formel-Code: ${escapeHtml(err.message)}</div>`;
+        if (msgEl) {
+          msgEl.innerHTML = `<div class="result-banner result-err">❌ Fehler beim Einlesen: ${escapeHtml(err.message)}</div>`;
+        }
       }
     }
 
     function runCustomFormulaCalc(cfId) {
-      const cf = customFormulas.find(x => x.id === cfId);
+      const cf = customFormulas.find(f => f.id === cfId);
       if (!cf) return;
-      const v1 = parseFloat(document.getElementById("cfv1-" + cfId)?.value);
-      const v2 = parseFloat(document.getElementById("cfv2-" + cfId)?.value);
+      const v1 = parseFloat(document.getElementById("cfv1-" + cfId)?.value) || 0;
+      const v2 = parseFloat(document.getElementById("cfv2-" + cfId)?.value) || 0;
       const resBox = document.getElementById("cfres-" + cfId);
-      if (isNaN(v1) || isNaN(v2) || !resBox) return;
+      if (!resBox) return;
 
-      let out = 0;
-      if (cf.formulaType === "div") {
-        if (v2 === 0) {
-          resBox.innerHTML = `<div class="result-banner result-err">Division durch 0 ist nicht definiert.</div>`;
-          return;
+      try {
+        const expr = String(cf.calcExpr || "v1 + v2");
+        if (!/^[0-9v12+\-*/().\sMathPIsqrtpowabs]+$/.test(expr)) {
+          throw new Error("Unsicherer Ausdruck");
         }
-        out = v1 / v2;
-      } else if (cf.formulaType === "add") {
-        out = v1 + v2;
-      } else {
-        out = v1 * v2;
+        const fn = new Function("v1", "v2", `"use strict"; return (${expr});`);
+        const val = fn(v1, v2);
+        const formatted = Number.isFinite(val) ? Number(val.toFixed(4)) : val;
+        resBox.innerHTML = `<div class="result-banner result-ok">Ergebnis: <strong>${escapeHtml(formatted)}</strong> ${escapeHtml(cf.unit || "")}</div>`;
+      } catch (_) {
+        resBox.innerHTML = `<div class="result-banner result-err">❌ Rechenausdruck konnte nicht ausgewertet werden.</div>`;
       }
-
-      resBox.innerHTML = `<div class="result-banner result-ok">Ergebnis: <strong>${Number.isInteger(out) ? out : out.toFixed(3)}</strong></div>`;
     }
 
     function deleteCustomFormula(cfId) {
-      if (!isAdmin()) return;
-      customFormulas = customFormulas.filter(x => x.id !== cfId);
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
+      customFormulas = customFormulas.filter(f => f.id !== cfId);
       saveCustomFormulas();
       renderSidebar();
       renderView();
     }
 
-    function selectSubjectForPermissions(subId) {
-      editingSubjectId = subId;
+    function openAccessModal(subId) {
+      if (!isAdmin()) return;
       const sub = subjects.find(s => s.id === subId);
-      tempSelectedUsers = new Set(sub.allowedUsers || []);
-      renderPermissionEditor();
+      if (!sub) return;
+      editingSubjectId = subId;
+      tempSelectedUsers = new Set(Array.isArray(sub.allowedUsers) ? sub.allowedUsers : []);
+      renderView();
     }
 
-    function renderPermissionEditor() {
+    function renderInlineAccessEditor() {
       const sub = subjects.find(s => s.id === editingSubjectId);
-      const box = document.getElementById("permissionEditorBox");
-      if (!sub || !box) return;
+      if (!sub) return "";
+      const safeSubId = escapeJsSingle(sub.id);
 
-      box.innerHTML = `
-        <div style="background:var(--bg-input); padding:16px; border-radius:12px; border:1px solid var(--border);">
-          <h4 style="margin-bottom:8px;">Berechtigungen für: ${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</h4>
-          <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer;">
-            <input type="checkbox" id="permAccessAll" ${sub.accessAll ? "checked" : ""} onchange="toggleAccessAllCheck()">
-            Für ALLE Benutzer freigeben
+      return `
+        <div class="card" style="margin-top:16px; background:var(--bg-input);">
+          <h4>Berechtigungen für: ${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</h4>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:700; cursor:pointer;">
+            <input type="checkbox" id="modalAccessAll" ${sub.accessAll ? "checked" : ""} onchange="toggleModalUsersList()">
+            Alle Benutzer dürfen dieses Fach sehen
           </label>
-
-          <div id="userCheckboxesWrap" style="margin-top:12px; ${sub.accessAll ? "opacity:0.45; pointer-events:none;" : ""}">
-            <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:6px;">Einzelne Benutzer auswählen:</div>
+          <div id="modalUsersList" style="display:${sub.accessAll ? "none" : "block"}; margin-top:10px;">
+            <div style="font-size:12px; color:var(--text-muted);">Wähle die freigeschalteten Benutzer aus:</div>
             <div class="user-checkbox-grid">
               ${users.map(u => `
                 <label class="user-check-label">
-                  <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleUserPerm(${Number(u.id)}, this.checked)">
-                  <span>${escapeHtml(u.name)} <small style="color:var(--text-muted);">(${escapeHtml(u.role)})</small></span>
+                  <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleUserInModal(${Number(u.id)}, this.checked)">
+                  <span>${escapeHtml(u.name)}</span>
                 </label>
               `).join("")}
             </div>
           </div>
-
-          <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
-            <button class="btn-primary" onclick="saveSubjectPermissions()">💾 Freigaben speichern</button>
-            <span id="permSavedMsg" style="font-size:13px; color:#10b981; font-weight:700;"></span>
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+            <button class="btn-secondary" onclick="editingSubjectId = null; renderView();">Abbrechen</button>
+            <button class="btn-primary" onclick="saveSubjectAccess('${safeSubId}')">Speichern</button>
           </div>
         </div>
       `;
     }
 
-    function toggleAccessAllCheck() {
-      const checked = document.getElementById("permAccessAll").checked;
-      const wrap = document.getElementById("userCheckboxesWrap");
-      wrap.style.opacity = checked ? "0.45" : "1";
-      wrap.style.pointerEvents = checked ? "none" : "auto";
+    function toggleModalUsersList() {
+      const allChecked = document.getElementById("modalAccessAll").checked;
+      document.getElementById("modalUsersList").style.display = allChecked ? "none" : "block";
     }
 
-    function toggleUserPerm(userId, isChecked) {
-      if (isChecked) tempSelectedUsers.add(userId);
+    function toggleUserInModal(userId, checked) {
+      if (checked) tempSelectedUsers.add(userId);
       else tempSelectedUsers.delete(userId);
     }
 
-    function saveSubjectPermissions() {
-      const sub = subjects.find(s => s.id === editingSubjectId);
+    function saveSubjectAccess(subId) {
+      if (!isAdmin()) return;
+      const sub = subjects.find(s => s.id === subId);
       if (!sub) return;
-      sub.accessAll = document.getElementById("permAccessAll").checked;
-      sub.allowedUsers = Array.from(tempSelectedUsers);
+      sub.accessAll = document.getElementById("modalAccessAll").checked;
+      sub.allowedUsers = sub.accessAll ? [] : Array.from(tempSelectedUsers);
+      editingSubjectId = null;
       saveSubjects();
       renderSidebar();
-      document.getElementById("permSavedMsg").textContent = "✓ Gespeichert!";
+      renderView();
     }
 
     applyScreenVisibility();
