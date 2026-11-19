@@ -105,7 +105,7 @@
     .invite-pill-btn:hover { border-color: var(--accent); background: #263349; }
 
     /* ==========================================================
-       LOGIN / INVITE SCREEN (EXAKT WIE SCREENSHOT)
+       LOGIN / INVITE SCREEN
        ========================================================== */
     .login-screen-wrapper {
       flex: 1;
@@ -144,9 +144,7 @@
       margin-bottom: 8px;
       color: var(--text-main);
     }
-    .login-title span {
-      color: var(--accent);
-    }
+    .login-title span { color: var(--accent); }
     .login-subtitle {
       font-size: 13.5px;
       color: var(--text-muted);
@@ -155,7 +153,6 @@
       padding: 0 8px;
     }
 
-    /* SEGMENTED TABS (Anmelden / Mit Invite-Code) */
     .segmented-control {
       background: var(--bg-input);
       border-radius: 14px;
@@ -182,10 +179,7 @@
       box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
     }
 
-    .login-form-group {
-      text-align: left;
-      margin-bottom: 16px;
-    }
+    .login-form-group { text-align: left; margin-bottom: 16px; }
     .login-label {
       display: block;
       font-size: 11px;
@@ -206,10 +200,7 @@
       outline: none;
       transition: border-color 0.15s;
     }
-    .login-input:focus {
-      border-color: var(--accent);
-      background: var(--bg-card);
-    }
+    .login-input:focus { border-color: var(--accent); background: var(--bg-card); }
     .login-submit-btn {
       width: 100%;
       background: var(--accent);
@@ -288,8 +279,11 @@
     }
     .points-pill {
       background: var(--accent-soft); color: var(--accent);
-      font-weight: 700; font-size: 12px; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+      font-weight: 700; font-size: 12px; padding: 5px 10px; border-radius: 999px;
+      white-space: nowrap; cursor: pointer; border: 1px solid transparent;
+      transition: border-color 0.15s, transform 0.1s;
     }
+    .points-pill:hover { border-color: var(--accent); transform: scale(1.03); }
 
     .nav-section-label {
       font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
@@ -324,9 +318,11 @@
     }
     .calendar-pill {
       background: var(--bg-card); border: 1px solid var(--border);
-      padding: 6px 12px; border-radius: 999px; display: flex; align-items: center;
+      padding: 7px 13px; border-radius: 999px; display: flex; align-items: center;
       gap: 8px; font-weight: 700; font-size: 13px; box-shadow: var(--shadow);
+      cursor: pointer; transition: border-color 0.15s, transform 0.1s;
     }
+    .calendar-pill:hover { border-color: var(--accent); transform: translateY(-1px); }
     .calendar-count { background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
 
     /* CARDS & BUTTONS */
@@ -341,16 +337,36 @@
     .exam-warning-top {
       display: flex; justify-content: space-between; align-items: flex-start;
       gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--warning-text);
+      flex-wrap: wrap;
     }
     .exam-item-box {
       background: var(--bg-card); border: 1px solid var(--warning-border);
-      border-radius: 12px; padding: 14px 16px;
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 8px;
       display: flex; justify-content: space-between; align-items: center; gap: 12px;
     }
+    .exam-item-box:last-child { margin-bottom: 0; }
     .days-badge {
       background: #fef3c7; color: #b45309; font-weight: 700;
       font-size: 12px; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
     }
+
+    /* LEADERBOARD STYLING */
+    .leaderboard-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border);
+      background: var(--bg-input); margin-bottom: 10px;
+    }
+    .leaderboard-row.is-me {
+      border-color: var(--accent); background: var(--accent-soft);
+    }
+    .rank-badge {
+      width: 34px; height: 34px; border-radius: 50%; font-weight: 800; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      background: var(--bg-card); border: 1px solid var(--border);
+    }
+    .rank-1 { background: #fef08a; color: #854d0e; border-color: #eab308; }
+    .rank-2 { background: #e2e8f0; color: #334155; border-color: #94a3b8; }
+    .rank-3 { background: #fed7aa; color: #9a3412; border-color: #f97316; }
 
     .btn-primary {
       background: var(--accent); color: #fff; border: none;
@@ -367,7 +383,6 @@
       background: var(--danger-bg); color: var(--danger-text); border: none;
       padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;
     }
-
 
     .ai-code-box {
       background: var(--bg-input);
@@ -485,7 +500,7 @@
       .close-sidebar-btn { display: flex; align-items: center; justify-content: center; }
     }
 
-    /* SPICKZETTEL TABELLE (WIE SCREENSHOT) */
+    /* SPICKZETTEL TABELLE */
     .spickzettel-table {
       width: 100%;
       border-collapse: collapse;
@@ -510,21 +525,10 @@
       border-bottom: 1px solid var(--border);
       vertical-align: middle;
     }
-    .spickzettel-table tbody tr:last-child td {
-      border-bottom: none;
-    }
-    .spickzettel-rule-name {
-      font-weight: 700;
-      color: var(--text-main);
-    }
-    .spickzettel-math {
-      color: #15803d;
-      font-weight: 700;
-      font-size: 15px;
-    }
-    [data-theme="dark"] .spickzettel-math {
-      color: #4ade80;
-    }
+    .spickzettel-table tbody tr:last-child td { border-bottom: none; }
+    .spickzettel-rule-name { font-weight: 700; color: var(--text-main); }
+    .spickzettel-math { color: #15803d; font-weight: 700; font-size: 15px; }
+    [data-theme="dark"] .spickzettel-math { color: #4ade80; }
 
     /* MATURA TEXTSORTEN DETAILS */
     details.ts-item {
@@ -547,7 +551,6 @@
     .ts-panel ul, .ts-panel ol { padding-left: 18px; }
     .ts-panel li { margin-bottom: 4px; }
     .sample-quote { font-style: italic; white-space: pre-line; color: var(--text-main); line-height: 1.5; }
-
   </style>
 </head>
 <body>
@@ -557,7 +560,7 @@
     <div class="top-status-row">
       <div class="status-indicator">
         <span class="dot-green"></span>
-        <span id="statusUserText">Aktiv als <strong>Gerry (Admin)</strong> • Desktop & Smartphone optimiert</span>
+        <span id="statusUserText">Aktiv als <strong>Gerry (Admin)</strong> • Desktop &amp; Smartphone optimiert</span>
       </div>
       <button class="invite-pill-btn" id="topToggleScreenBtn" onclick="toggleLoginScreen()">
         ← Zurück zur Plattform
@@ -566,7 +569,7 @@
   </div>
 
   <!-- ==========================================================
-       SCREEN 1: STARTBILDSCHIRM / LOGIN (EXAKT WIE DEIN SCREENSHOT)
+       SCREEN 1: STARTBILDSCHIRM / LOGIN
        ========================================================== -->
   <div class="login-screen-wrapper" id="loginScreen">
     <div class="login-card">
@@ -642,13 +645,20 @@
             <div style="font-size:12px; color:var(--text-muted);">6 Tage Streak 🔥</div>
           </div>
         </div>
-        <div class="points-pill" id="userPointsDisplay">580 Pkt</div>
+        <button class="points-pill" id="userPointsDisplay" onclick="navigate('leaderboard')" title="Leaderboard öffnen">580 Pkt 🏆</button>
       </div>
 
       <div>
         <div class="nav-section-label">Lern-Zentrale</div>
         <button class="nav-item active" onclick="navigate('home', this)">
           <span class="nav-item-left">🏠 Startseite</span>
+        </button>
+        <button class="nav-item" onclick="navigate('leaderboard', this)">
+          <span class="nav-item-left">🏆 Leaderboard</span>
+        </button>
+        <button class="nav-item" onclick="navigate('calendar', this)">
+          <span class="nav-item-left">📅 Prüfungskalender</span>
+          <span class="count-pill" id="sidebarExamCount">2</span>
         </button>
         <button class="nav-item" onclick="navigate('custom-exam', this)">
           <span class="nav-item-left">🎓 Eigene Prüfung</span>
@@ -664,7 +674,7 @@
       </div>
 
       <div>
-        <div class="nav-section-label">Nachschlagen & Rechner</div>
+        <div class="nav-section-label">Nachschlagen &amp; Rechner</div>
         <button class="nav-item" onclick="navigate('formulas', this)">
           <span class="nav-item-left">📐 Formelsammlung &amp; Rechner</span>
           <span class="count-pill">22</span>
@@ -676,12 +686,12 @@
       </div>
 
       <div>
-        <div class="nav-section-label">System & Verwaltung</div>
+        <div class="nav-section-label">System &amp; Verwaltung</div>
         <button class="nav-item" onclick="navigate('settings', this)">
-          <span class="nav-item-left">⚙️ Einstellungen & Passwort</span>
+          <span class="nav-item-left">⚙️ Einstellungen &amp; Passwort</span>
         </button>
         <button class="nav-item" id="navAdminBtn" onclick="navigate('admin', this)">
-          <span class="nav-item-left">🛡️ Admin (Benutzer & Kurse)</span>
+          <span class="nav-item-left">🛡️ Admin (Benutzer &amp; Kurse)</span>
         </button>
       </div>
     </aside>
@@ -692,9 +702,15 @@
           <button class="hamburger-btn" onclick="toggleSidebar(true)">☰</button>
           <h2 id="pageHeading" style="font-size:20px;">🏠 Startseite</h2>
         </div>
-        <div class="calendar-pill">
-          <span>📅</span>
-          <span class="calendar-count">2</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="calendar-pill" onclick="navigate('leaderboard')" title="Rangliste öffnen">
+            <span>🏆</span>
+            <span id="headerPointsBadge" style="color:var(--accent);">580</span>
+          </button>
+          <button class="calendar-pill" onclick="navigate('calendar')" title="Prüfungskalender öffnen">
+            <span>📅</span>
+            <span class="calendar-count" id="headerCalendarCount">2</span>
+          </button>
         </div>
       </div>
 
@@ -721,60 +737,80 @@
 
       <div id="pwdModalError" style="color:#ef4444; font-size:12px; font-weight:600; margin-bottom:10px; display:none;"></div>
 
-      <button class="login-submit-btn" style="margin-bottom:0;" onclick="confirmPersonalPassword()">Passwort speichern & starten →</button>
+      <button class="login-submit-btn" style="margin-bottom:0;" onclick="confirmPersonalPassword()">Passwort speichern &amp; starten →</button>
     </div>
   </div>
 
   <script>
     /* ==========================================================
-       1. BENUTZER-DATENBANK (MIT INITIALPASSWORT & PASSWORT-ÄNDERUNG)
+       1. BENUTZER- & PRÜFUNGS-DATENBANK
        ========================================================== */
     const defaultUsers = [
-      {
-        id: 1,
-        name: "Gerry",
-        email: "gerry@lernen-mit-gerry.at",
-        role: "Admin",
-        password: "gerry2026",
-        mustChangePassword: false,
-        initials: "GE",
-        points: 580
-      },
-      {
-        id: 2,
-        name: "Thomas M.",
-        email: "thomas@lernen-mit-gerry.at",
-        role: "Schüler",
-        password: "THOMAS-START",
-        mustChangePassword: true,
-        initials: "TM",
-        points: 320
-      },
-      {
-        id: 3,
-        name: "Lukas K.",
-        email: "lukas@lernen-mit-gerry.at",
-        role: "Schüler",
-        password: "LUKAS-START",
-        mustChangePassword: true,
-        initials: "LK",
-        points: 290
-      },
-      {
-        id: 4,
-        name: "Sarah W.",
-        email: "sarah@lernen-mit-gerry.at",
-        role: "Schüler",
-        password: "sarah2026",
-        mustChangePassword: false,
-        initials: "SW",
-        points: 410
-      }
+      { id: 1, name: "Gerry", email: "gerry@lernen-mit-gerry.at", role: "Admin", password: "gerry2026", mustChangePassword: false, initials: "GE", points: 580 },
+      { id: 2, name: "Thomas M.", email: "thomas@lernen-mit-gerry.at", role: "Schüler", password: "THOMAS-START", mustChangePassword: true, initials: "TM", points: 320 },
+      { id: 3, name: "Lukas K.", email: "lukas@lernen-mit-gerry.at", role: "Schüler", password: "LUKAS-START", mustChangePassword: true, initials: "LK", points: 290 },
+      { id: 4, name: "Sarah W.", email: "sarah@lernen-mit-gerry.at", role: "Schüler", password: "sarah2026", mustChangePassword: false, initials: "SW", points: 410 }
     ];
 
     let users = JSON.parse(localStorage.getItem("lmg_users_v3")) || defaultUsers;
     function saveUsers() {
       localStorage.setItem("lmg_users_v3", JSON.stringify(users));
+    }
+
+    function getDefaultExams() {
+      const addDays = (d) => {
+        const dt = new Date();
+        dt.setDate(dt.getDate() + d);
+        return dt.toISOString().split("T")[0];
+      };
+      return [
+        { id: "ex-1", subject: "Fertigungstechnik", title: "FET Test 1 (Wärmebehandlung & Guss)", date: addDays(4), notes: "Kapitel 1–3 wiederholen" },
+        { id: "ex-2", subject: "Mathematik", title: "Schularbeit Differentialrechnung", date: addDays(14), notes: "Potenz-, Produkt- und Kettenregel" }
+      ];
+    }
+
+    let exams = JSON.parse(localStorage.getItem("lmg_exams_v1")) || getDefaultExams();
+    function saveExams() {
+      localStorage.setItem("lmg_exams_v1", JSON.stringify(exams));
+    }
+
+    function getDaysUntil(dateStr) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(dateStr + "T00:00:00");
+      return Math.round((target - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function formatDaysBadge(diffDays) {
+      if (diffDays < 0) return `vor ${Math.abs(diffDays)} Tag(en)`;
+      if (diffDays === 0) return "Heute!";
+      if (diffDays === 1) return "Morgen!";
+      return `in ${diffDays} Tagen`;
+    }
+
+    function addExam() {
+      const subject = document.getElementById("newExamSubject").value.trim() || "Allgemein";
+      const title = document.getElementById("newExamTitle").value.trim();
+      const date = document.getElementById("newExamDate").value;
+      const notes = document.getElementById("newExamNotes").value.trim();
+
+      if (!title || !date) {
+        alert("Bitte Titel und Datum der Prüfung ausfüllen!");
+        return;
+      }
+
+      exams.push({ id: "ex-" + Date.now(), subject, title, date, notes });
+      exams.sort((a, b) => a.date.localeCompare(b.date));
+      saveExams();
+      renderSidebar();
+      renderView();
+    }
+
+    function deleteExam(examId) {
+      exams = exams.filter(e => e.id !== examId);
+      saveExams();
+      renderSidebar();
+      renderView();
     }
 
     const defaultSubjects = [
@@ -810,1393 +846,4 @@
           {
             id: "f-cnc", name: "Zerspanung & CNC",
             questions: [
-              { id: "q5", type: "calc", question: "Berechne die Drehzahl n (in 1/min) bei vc = 157 m/min und d = 50 mm (π ≈ 3,14).", answer: "1000", explanation: "n = (vc · 1000) / (d · π) = 157000 / 157 = 1000 1/min." }
-            ]
-          }
-        ]
-      },
-      {
-        id: "mechanik", name: "Mechanik", icon: "📐", color: "#10b981", category: "TECHNIK",
-        favorite: true, accessAll: false, allowedUsers: [2, 3],
-        folders: [
-          {
-            id: "f-statik", name: "Statik & Kräftesysteme",
-            questions: [
-              { id: "q6", type: "calc", question: "Eine Kraft F = 250 N wirkt an einem Hebelarm l = 0,4 m senkrecht. Moment M in Nm?", answer: "100", explanation: "M = F · l = 250 N · 0,4 m = 100 Nm." }
-            ]
-          }
-        ]
-      },
-      {
-        id: "elektro", name: "Elektrotechnik", icon: "⚡", color: "#f59e0b", category: "TECHNIK",
-        favorite: false, accessAll: false, allowedUsers: [2],
-        folders: [
-          {
-            id: "f-ohm", name: "Gleichstrom & Ohmsches Gesetz",
-            questions: [
-              { id: "q7", type: "calc", question: "Widerstand R = 20 Ω an U = 230 V. Berechne Strom I in Ampere.", answer: "11.5", explanation: "I = U / R = 230 V / 20 Ω = 11,5 A." }
-            ]
-          }
-        ]
-      },
-      {
-        id: "deutsch", name: "Deutsch (Matura)", icon: "🇦🇹", color: "#ef4444", category: "MATURA",
-        favorite: true, accessAll: true, allowedUsers: [],
-        folders: [
-          {
-            id: "f-textsorten", name: "Textsorten & Argumentation",
-            questions: [
-              { id: "q8", type: "mc", question: "Welche Textsorte verlangt zwingend Überschrift, Vorspann und Zwischenüberschriften?", options: ["Leserbrief", "Kommentar", "Meinungsrede", "Zusammenfassung"], correct: "Kommentar", explanation: "Der Kommentar ist eine journalistische Textsorte mit Titel, Lead und Subheadlines." }
-            ]
-          }
-        ]
-      },
-      {
-        id: "englisch", name: "Englisch (Matura)", icon: "🇬🇧", color: "#8b5cf6", category: "MATURA",
-        favorite: true, accessAll: true, allowedUsers: [],
-        folders: [
-          {
-            id: "f-writing", name: "Formal Writing & Tenses",
-            questions: [
-              { id: "q9", type: "mc", question: "Welche Grußformel passt zu 'Dear Sir or Madam,'?", options: ["Yours sincerely,", "Yours faithfully,", "Best wishes,", "Kind regards,"], correct: "Yours faithfully,", explanation: "Bei unbekanntem Empfänger steht immer 'Yours faithfully'." }
-            ]
-          }
-        ]
-      }
-    ];
-
-    let subjects = JSON.parse(localStorage.getItem("lmg_subjects_v3")) || defaultSubjects;
-    function saveSubjects() {
-      localStorage.setItem("lmg_subjects_v3", JSON.stringify(subjects));
-    }
-
-    let currentUser = users[0];
-    let isLoginScreenVisible = true; // Startet direkt auf dem Startbildschirm wie im Screenshot!
-    let currentView = "home";
-    let activeFolderId = null;
-    let activeMaturaLang = "deutsch";
-    let editingSubjectId = null;
-    let tempSelectedUsers = new Set();
-
-    /* ==========================================================
-       2. STARTBILDSCHIRM / LOGIN & PASSWORT-ÄNDERUNG
-       ========================================================== */
-    function switchLoginTab(tab) {
-      document.getElementById("tabLoginBtn").classList.toggle("active", tab === "login");
-      document.getElementById("tabInviteBtn").classList.toggle("active", tab === "invite");
-      document.getElementById("loginTabContent").style.display = tab === "login" ? "block" : "none";
-      document.getElementById("inviteTabContent").style.display = tab === "invite" ? "block" : "none";
-      document.getElementById("loginErrorMsg").style.display = "none";
-      document.getElementById("inviteErrorMsg").style.display = "none";
-    }
-
-    function toggleLoginScreen(forcePortal = null) {
-      if (forcePortal === true) {
-        isLoginScreenVisible = false;
-      } else if (forcePortal === false) {
-        isLoginScreenVisible = true;
-      } else {
-        isLoginScreenVisible = !isLoginScreenVisible;
-      }
-
-      document.getElementById("loginScreen").style.display = isLoginScreenVisible ? "flex" : "none";
-      document.getElementById("portalScreen").style.display = isLoginScreenVisible ? "none" : "flex";
-      document.getElementById("topToggleScreenBtn").innerText = isLoginScreenVisible
-        ? "← Zurück zur Plattform"
-        : "🔒 Startbildschirm / Login";
-
-      if (!isLoginScreenVisible) {
-        renderSidebar();
-        renderView();
-      }
-    }
-
-    function submitStandardLogin() {
-      const idVal = document.getElementById("loginIdentifierInput").value.trim().toLowerCase();
-      const passVal = document.getElementById("loginPassInput").value.trim();
-      const errBox = document.getElementById("loginErrorMsg");
-
-      const found = users.find(u =>
-        (u.email.toLowerCase() === idVal || u.name.toLowerCase() === idVal) && u.password === passVal
-      );
-
-      if (!found) {
-        errBox.innerText = "E-Mail/Name oder Passwort stimmt nicht.";
-        errBox.style.display = "block";
-        return;
-      }
-
-      completeLoginForUser(found);
-    }
-
-    function submitInviteLogin() {
-      const nameVal = document.getElementById("inviteNameInput").value.trim().toLowerCase();
-      const codeVal = document.getElementById("inviteCodeInput").value.trim();
-      const errBox = document.getElementById("inviteErrorMsg");
-
-      const found = users.find(u =>
-        (u.name.toLowerCase() === nameVal || u.email.toLowerCase() === nameVal) && u.password === codeVal
-      );
-
-      if (!found) {
-        errBox.innerText = "Name oder Initialpasswort nicht gefunden. Bitte prüfe deine Schreibweise.";
-        errBox.style.display = "block";
-        return;
-      }
-
-      completeLoginForUser(found);
-    }
-
-    function completeLoginForUser(userObj) {
-      currentUser = userObj;
-      currentView = "home";
-      activeFolderId = null;
-      updateTopStatusBar();
-      toggleLoginScreen(true);
-
-      // Falls der Benutzer ein Initialpasswort hat -> Modal zur Passwortänderung öffnen!
-      if (currentUser.mustChangePassword) {
-        document.getElementById("pwdModalUserName").innerText = currentUser.name;
-        document.getElementById("newPersonalPwd1").value = "";
-        document.getElementById("newPersonalPwd2").value = "";
-        document.getElementById("pwdModalError").style.display = "none";
-        document.getElementById("forcePasswordModal").classList.add("open");
-      }
-    }
-
-    function confirmPersonalPassword() {
-      const p1 = document.getElementById("newPersonalPwd1").value.trim();
-      const p2 = document.getElementById("newPersonalPwd2").value.trim();
-      const err = document.getElementById("pwdModalError");
-
-      if (p1.length < 4) {
-        err.innerText = "Bitte gib ein Passwort mit mindestens 4 Zeichen ein.";
-        err.style.display = "block";
-        return;
-      }
-      if (p1 !== p2) {
-        err.innerText = "Die beiden Passwörter stimmen nicht überein.";
-        err.style.display = "block";
-        return;
-      }
-
-      currentUser.password = p1;
-      currentUser.mustChangePassword = false;
-      saveUsers();
-      document.getElementById("forcePasswordModal").classList.remove("open");
-      renderView();
-    }
-
-    function changeOwnPasswordFromSettings() {
-      const p1 = document.getElementById("settingsNewPwd1").value.trim();
-      const p2 = document.getElementById("settingsNewPwd2").value.trim();
-      const msg = document.getElementById("settingsPwdMsg");
-
-      if (p1.length < 4) {
-        msg.innerHTML = `<div class="result-banner result-err">Das neue Passwort muss mindestens 4 Zeichen lang sein.</div>`;
-        return;
-      }
-      if (p1 !== p2) {
-        msg.innerHTML = `<div class="result-banner result-err">Die Passwörter stimmen nicht überein.</div>`;
-        return;
-      }
-
-      currentUser.password = p1;
-      currentUser.mustChangePassword = false;
-      saveUsers();
-      document.getElementById("settingsNewPwd1").value = "";
-      document.getElementById("settingsNewPwd2").value = "";
-      msg.innerHTML = `<div class="result-banner result-ok">✅ Dein persönliches Passwort wurde erfolgreich geändert!</div>`;
-    }
-
-    function updateTopStatusBar() {
-      document.getElementById("statusUserText").innerHTML =
-        `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Desktop &amp; Smartphone optimiert`;
-    }
-
-    /* ==========================================================
-       3. ADMIN: NEUE BENUTZER + INITIALPASSWORT ZUWEISEN
-       ========================================================== */
-    function adminCreateUser() {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      const name = document.getElementById("adminNewUserName").value.trim();
-      const email = document.getElementById("adminNewUserEmail").value.trim();
-      const initPwd = document.getElementById("adminNewUserInitPwd").value.trim();
-      const role = document.getElementById("adminNewUserRole").value;
-
-      if (!name || !initPwd) {
-        alert("Bitte Name und Initialpasswort ausfüllen!");
-        return;
-      }
-
-      const parts = name.split(" ");
-      const initials = (parts[0][0] + (parts[1] ? parts[1][0] : parts[0][1] || "")).toUpperCase();
-      const generatedEmail = email || name.toLowerCase().replace(/[^a-z0-9]/g, "") + "@lernen-mit-gerry.at";
-
-      users.push({
-        id: Date.now(),
-        name,
-        email: generatedEmail,
-        role,
-        password: initPwd,
-        mustChangePassword: true,
-        initials,
-        points: 0
-      });
-
-      saveUsers();
-      renderView();
-    }
-
-    function adminResetUserPassword(userId) {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      const target = users.find(u => u.id === userId);
-      if (!target) return;
-      const newInit = prompt(`Neues Initialpasswort für ${target.name} festlegen:`, "NEU-" + Math.floor(1000 + Math.random() * 9000));
-      if (!newInit || !newInit.trim()) return;
-
-      target.password = newInit.trim();
-      target.mustChangePassword = true;
-      saveUsers();
-      renderView();
-    }
-
-    function adminToggleUserRole(userId) {
-      if (!isAdmin()) return;
-      const target = users.find(u => u.id === userId);
-      if (!target || target.id === currentUser.id) return;
-      target.role = target.role === "Admin" ? "Schüler" : "Admin";
-      saveUsers();
-      renderView();
-    }
-
-    function adminDeleteUser(userId) {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      if (userId === currentUser.id) return;
-      users = users.filter(u => u.id !== userId);
-      saveUsers();
-      renderView();
-    }
-
-    /* ==========================================================
-       4. THEME & AKZENTFARBE
-       ========================================================== */
-    function setTheme(theme) {
-      document.documentElement.setAttribute("data-theme", theme);
-      localStorage.setItem("lmg_theme", theme);
-      if (currentView === "settings" && !isLoginScreenVisible) renderView();
-    }
-
-    function setAccentColor(hex) {
-      document.documentElement.style.setProperty("--accent", hex);
-      document.documentElement.style.setProperty("--accent-hover", hex);
-      document.documentElement.style.setProperty("--accent-soft", hex + "1F");
-      localStorage.setItem("lmg_accent", hex);
-      if (currentView === "settings" && !isLoginScreenVisible) renderView();
-    }
-
-    (function loadPreferences() {
-      setTheme(localStorage.getItem("lmg_theme") || "light");
-      setAccentColor(localStorage.getItem("lmg_accent") || "#2563eb");
-    })();
-
-    /* ==========================================================
-       5. SIDEBAR & NAVIGATION
-       ========================================================== */
-    function isAdmin() {
-      return currentUser && String(currentUser.role).trim().toLowerCase() === "admin";
-    }
-
-    function getVisibleSubjects() {
-      if (isAdmin()) return subjects;
-      return subjects.filter(s => s.accessAll || s.allowedUsers.includes(currentUser.id));
-    }
-
-    function renderSidebar() {
-      document.getElementById("sidebarUserName").innerText = currentUser.name;
-      document.getElementById("avatarInitials").innerText = currentUser.initials;
-      document.getElementById("sidebarRoleBadge").innerText = currentUser.role;
-      document.getElementById("userPointsDisplay").innerText = currentUser.points + " Pkt";
-      updateTopStatusBar();
-
-      document.getElementById("navAdminBtn").style.display = isAdmin() ? "flex" : "none";
-
-      const visible = getVisibleSubjects();
-      document.getElementById("sidebarSubjects").innerHTML = visible.map(sub => `
-        <div class="nav-item ${currentView === 'subject-' + sub.id ? 'active' : ''}"
-             style="padding-right:8px;"
-             onclick="navigate('subject-${sub.id}', this)">
-          <span class="nav-item-left">
-            <span class="subject-dot" style="background:${sub.color};"></span>
-            <span>${sub.icon} ${sub.name}</span>
-          </span>
-          <span style="display:flex; align-items:center; gap:6px;">
-            <span onclick="toggleFavoriteSubject('${sub.id}', event)"
-                  title="${sub.favorite ? 'Aus Favoriten entfernen' : 'Als Favorit markieren'}"
-                  style="cursor:pointer; font-size:14px; line-height:1; opacity:${sub.favorite ? '1' : '0.35'};">⭐</span>
-            <span class="count-pill">${sub.folders.length}</span>
-          </span>
-        </div>
-      `).join("");
-    }
-
-    function toggleSidebar(open) {
-      document.getElementById("sidebar").classList.toggle("open", open);
-    }
-
-    function navigate(viewId, btnEl) {
-      currentView = viewId;
-      activeFolderId = null;
-      document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
-      if (btnEl) btnEl.classList.add("active");
-      toggleSidebar(false);
-      renderView();
-    }
-
-    /* ==========================================================
-       6. ABLEITUNGSTRAINER & FORMELRECHNER
-       ========================================================== */
-    
-    function renderSpickzettelAbleitungenCard() {
-      return `
-        <div class="card">
-          <h3 style="font-size:18px; margin-bottom:4px;">Spickzettel: Alle integrierten Ableitungsregeln</h3>
-          <div style="overflow-x:auto;">
-            <table class="spickzettel-table">
-              <thead>
-                <tr>
-                  <th>Regel / Funktion</th>
-                  <th>Ausgangsfunktion f(x)</th>
-                  <th>1. Ableitung f'(x)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="spickzettel-rule-name">Potenzregel</td>
-                  <td class="spickzettel-math">$c \cdot x^n$</td>
-                  <td class="spickzettel-math">$c \cdot n \cdot x^{n-1}$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">Bruchfunktion</td>
-                  <td class="spickzettel-math">$\dfrac{a}{x^n} = a \cdot x^{-n}$</td>
-                  <td class="spickzettel-math">$-\dfrac{a \cdot n}{x^{n+1}}$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">Wurzelfunktion</td>
-                  <td class="spickzettel-math">$\sqrt{x} = x^{1/2}$</td>
-                  <td class="spickzettel-math">$\dfrac{1}{2\sqrt{x}}$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">Trigonometrie</td>
-                  <td class="spickzettel-math">$\sin(x) \mid \cos(x) \mid \tan(x)$</td>
-                  <td class="spickzettel-math">$\cos(x) \mid -\sin(x) \mid \dfrac{1}{\cos^2(x)}$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">e-Funktion &amp; ln</td>
-                  <td class="spickzettel-math">$e^x \mid \ln(x)$</td>
-                  <td class="spickzettel-math">$e^x \mid \dfrac{1}{x}$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">Produktregel</td>
-                  <td class="spickzettel-math">$u(x) \cdot v(x)$</td>
-                  <td class="spickzettel-math">$u'(x) \cdot v(x) + u(x) \cdot v'(x)$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">Quotientenregel</td>
-                  <td class="spickzettel-math">$\dfrac{u(x)}{v(x)}$</td>
-                  <td class="spickzettel-math">$\dfrac{u'(x) \cdot v(x) - u(x) \cdot v'(x)}{[v(x)]^2}$</td>
-                </tr>
-                <tr>
-                  <td class="spickzettel-rule-name">Kettenregel</td>
-                  <td class="spickzettel-math">$u(v(x))$</td>
-                  <td class="spickzettel-math">$u'(v(x)) \cdot v'(x)$</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
-    }
-
-    const maturaTextsorten = {"deutsch": [{"title": "1. Erörterung (linear &amp; dialektisch)", "structure": ["<strong>Ziel:</strong> Sachliche, objektive Auseinandersetzung mit einer strittigen Problemfrage.", "<strong>Einleitung:</strong> Aktueller Anlass, Hinführung zum Thema, zentrale Fragestellung (ohne eigene Meinung vorwegzunehmen).", "<strong>Hauptteil:</strong> Argumente nach dem <em>3-B-Schema</em> (Behauptung – Begründung – Beispiel). Bei dialektischer Erörterung: Gegenthese zuerst (vom stärksten zum schwächsten Argument), dann eigene Position (vom schwächsten zum stärksten Argument – Sanduhrprinzip).", "<strong>Schluss:</strong> Zusammenfassendes Fazit, begründete eigene Stellungnahme, Ausblick/Lösungsansatz.", "<strong>Stil:</strong> Sachlich, standardsprachlich, Präsens, Konnektoren (<em>einerseits, demgegenüber, folglich</em>)."], "sample": "„Befürworter einer verpflichtenden Vier-Tage-Woche verweisen vor allem auf die gesteigerte Produktivität der Beschäftigten. Durch längere Erholungsphasen sinkt die Fehleranfälligkeit im Arbeitsalltag messbar, was Pilotprojekte in Großbritannien mit einem Rückgang der Krankenstände um über 60 Prozent belegen.\n\nDemgegenüber stehen jedoch erhebliche organisatorische Hürden in personalintensiven Branchen wie der Pflege oder dem produzierenden Gewerbe. Wo Schichtbetrieb rund um die Uhr erforderlich ist, führt eine Arbeitszeitverkürzung bei vollem Lohnausgleich unweigerlich zu steigenden Lohnstückkosten.\n\nZusammenfassend überwiegen die gesundheitlichen Vorteile nur dort, wo Arbeitsprozesse digitalisiert und flexibel gestaltet werden können. Eine pauschale gesetzliche Vorgabe wäre daher kontraproduktiv; sinnvoller sind branchenspezifische Tarifmodelle.“", "exercises": ["Erörtern Sie auf Basis eines Zeitungsartikels zur Künstlichen Intelligenz im Bildungswesen, inwiefern digitale Assistenzsysteme klassische Prüfungsformen ersetzen sollten.", "Setzen Sie sich mit der Forderung nach einem generellen Tempolimit von 100 km/h auf österreichischen Autobahnen auseinander.", "Diskutieren Sie Vor- und Nachteile eines verpflichtenden sozialen Jahres für alle Schulabgängerinnen und Schulabgänger.", "Erörtern Sie, ob Bargeldzahlungen durch gesetzliche Obergrenzen eingeschränkt werden sollten, um Schattenwirtschaft zu bekämpfen.", "Untersuchen Sie die gesellschaftlichen Auswirkungen von verpflichtenden Quotenregelungen für Führungspositionen in Konzernen."]}, {"title": "2. Kommentar", "structure": ["<strong>Ziel:</strong> Subjektive, pointierte Meinungsäußerung eines Journalisten zu einem aktuellen Thema.", "<strong>Überschrift:</strong> Prägnant, meinungsstark, oft provokant oder wortspielerisch (ggf. Untertitel).", "<strong>Einstieg (Lead):</strong> Direkter Aufhänger (aktuelles Ereignis/Zitat) + sofortige klare Positionierung (These).", "<strong>Hauptteil:</strong> Zuspitzende Argumentation, Bewertung von Gegenargumenten, rhetorische Stilmittel (Ironie, Metaphern, rhetorische Fragen).", "<strong>Schluss:</strong> Pointiertes Fazit, Appell oder bissige Schlussbemerkung (Kein „Ich finde“!)."], "sample": "<strong>Digitale Scheinheiligkeit im Klassenzimmer</strong>\n\nWer heute das Smartphone aus den Schulen verbannt, verwechselt das Verstecken eines Symptoms mit der Heilung einer Krankheit. Seit Monaten überbieten sich Bildungspolitiker mit Forderungen nach strikten Handyverboten – als ließe sich die digitale Realität schlicht an der Garderobe abgeben.\n\nNatürlich lenken permanente Push-Nachrichten ab. Doch ein pauschales Verbot entbindet Schulen genau von jener Aufgabe, die im 21. Jahrhundert überlebenswichtig ist: Medienkompetenz zu vermitteln. Wer Jugendlichen das Werkzeug wegnimmt, statt ihnen den kritischen Umgang damit beizubringen, erzieht digitale Analphabeten.\n\nStatt Verbotskultur braucht es endlich praxisnahe Unterrichtskonzepte. Alles andere ist bildungspolitische Symbolpolitik auf Kosten der nächsten Generation.", "exercises": ["Verfassen Sie einen Kommentar für eine überregionale Tageszeitung zum Thema „Fast Fashion und Wegwerfkonsum unter Jugendlichen“.", "Kommentieren Sie für ein Online-Magazin die zunehmende Verlagerung des Einzelhandels in den E-Commerce und das Aussterben von Innenstädten.", "Schreiben Sie einen pointierten Kommentar zur Debatte um Influencer-Marketing und versteckte Werbung in sozialen Netzwerken.", "Nehmen Sie in Form eines Kommentars Stellung zur Diskussion über höhere Studiengebühren oder Zugangsbeschränkungen an Universitäten.", "Verfassen Sie einen Kommentar zur Frage, ob Großveranstaltungen wie Olympische Spiele in Zeiten der Klimakrise noch zeitgemäß sind."]}, {"title": "3. Leserbrief", "structure": ["<strong>Ziel:</strong> Persönliche Reaktion einer Leserin / eines Lesers auf einen konkret veröffentlichten Zeitungs- oder Magazinartikel.", "<strong>Kopfzeile:</strong> Betreff/Bezug auf Artikel (Titel, Autor, Erscheinungsdatum) + Anrede („Sehr geehrte Redaktion,“).", "<strong>Einleitung:</strong> Klarer Bezug zum Ausgangstext und Nennung des eigenen Standpunkts (Zustimmung/Widerspruch).", "<strong>Hauptteil:</strong> Bezugnahme auf konkrete Textstellen des Ausgangstextes, eigene Argumente und persönliche Erfahrungen.", "<strong>Schluss:</strong> Abschließende Forderung/Appell, Grußformel, vollständiger Name + Wohnort (laut Vorgabe)."], "sample": "<strong>Betreff: Ihr Artikel „Wohnen wird zum Luxusgut“ von Maria Gruber vom 12.10.2026</strong>\n\nSehr geehrte Redaktion,\n\nmit großem Interesse, aber auch wachsender Ernüchterung habe ich den oben genannten Beitrag gelesen. Als junger Berufstätiger, der nebenbei eine Abendschule absolviert, kann ich die geschilderten Entwicklungen am Mietmarkt aus eigener Erfahrung bestätigen.\n\nBesonders die Aussage, junge Menschen müssten eben „flexibler bei der Wohnortwahl“ sein, greift zu kurz. Wer im Umland wohnt, zahlt die vermeintliche Mietersparnis doppelt durch Pendelkosten und verlorene Lebenszeit zurück. Solange Spekulation mit Baugrund nicht wirksam eingedämmt wird, bleibt leistbares Wohnen eine Illusion.\n\nEs ist höchste Zeit, den gemeinnützigen Wohnbau wieder massiv auszubauen, statt den Markt sich selbst zu überlassen.\n\nMit freundlichen Grüßen\nLukas Berger, Klosterneuburg", "exercises": ["Reagieren Sie mit einem Leserbrief auf einen Artikel, der die mangelnde Leistungsbereitschaft der „Generation Z“ kritisiert.", "Schreiben Sie einen Leserbrief zu einem Beitrag über die Einführung von KI-Systemen in der medizinischen Diagnostik.", "Verfassen Sie einen Leserbrief als Reaktion auf eine Kolumne, die das Ende des klassischen Verbrennungsmotors bis 2035 als wirtschaftlichen Fehler bezeichnet.", "Reagieren Sie auf einen Zeitungsbericht über den zunehmenden Lehrermangel und die Forderung nach Quereinsteigern an Schulen.", "Schreiben Sie einen Leserbrief zu einem Artikel über den massiven Ausbau von Windkraftanlagen in österreichischen Erholungsgebieten."]}, {"title": "4. Meinungsrede", "structure": ["<strong>Ziel:</strong> Mündlich vorgetragene Rede vor einem definierten Publikum, um zu überzeugen und zum Handeln zu bewegen.", "<strong>Einstieg:</strong> Situationsgerechte Begrüßung des Publikums + fesselnder Einstieg (Anekdote, provokante Frage, Statistik).", "<strong>Hauptteil:</strong> Klare Struktur, direkte Publikumsansprache (<em>„Stellen Sie sich vor…“, „Wir alle wissen…“</em>), abwechslungsreicher Satzbau (Parataxen), rhetorische Figuren (Anaphern, Klimax, Vergleiche).", "<strong>Schluss:</strong> Zusammenfassende Kernbotschaft, eindringlicher Appell zum Handeln, Dank an das Publikum."], "sample": "„Sehr geehrte Damen und Herren, liebe Schülerinnen und Schüler!\n\nHand aufs Herz: Wann haben Sie das letzte Mal eine Stunde lang ein Buch gelesen, ohne einmal auf Ihr Smartphone zu blicken? Wenn Sie jetzt kurz zögern, sind Sie in guter Gesellschaft.\n\nWir leben in einer Aufmerksamkeitsökonomie, die unsere Konzentration im Sekundentakt zerschneidet. Algorithmen wissen besser als wir selbst, welche Schlagzeile uns empört und welches Video uns festhält. Doch wer ständig nur konsumiert, verliert die Fähigkeit, eigene Gedanken zu Ende zu denken.\n\nDeshalb mein Appell an Sie alle: Nehmen Sie sich Ihre Aufmerksamkeit zurück! Schalten Sie abends bewusst ab und schaffen Sie Raum für echte Gespräche. Vielen Dank für Ihre Aufmerksamkeit.“", "exercises": ["Halten Sie eine Meinungsrede bei einer Jugendkonferenz zum Thema „Politische Mitbestimmung ab 16 – Chance oder Überforderung?“.", "Verfassen Sie eine Rede anlässlich einer Schulentlassungsfeier über den Wert handwerklicher und technischer Berufe im Vergleich zum Akademisierungswahn.", "Schreiben Sie eine Meinungsrede für ein Umweltforum zur Frage, ob individueller Verzicht oder technologische Innovation das Klima rettet.", "Halten Sie eine Rede vor Eltern und Lehrkräften über den verantwortungsvollen Umgang mit sozialen Medien und Cybermobbing.", "Verfassen Sie eine Meinungsrede bei einer Sportveranstaltung über die Bedeutung von Ehrenamt und Vereinsleben für den gesellschaftlichen Zusammenhalt."]}, {"title": "5. Textanalyse", "structure": ["<strong>Ziel:</strong> Systematische Untersuchung eines Sachtextes oder literarischen Textes hinsichtlich Inhalt, Aufbau, Sprache und Intention.", "<strong>Einleitung:</strong> Basissatz (Autor, Titel, Textsorte, Erscheinungsjahr/-ort, Kernaussage/Thema).", "<strong>Hauptteil:</strong>\n                <br>1. Inhaltliche Strukturierung (Sinnabschnitte, Argumentationsgang).\n                <br>2. Sprachlich-stilistische Analyse (Wortwahl, Satzbau, Stilmittel wie Metaphern, Ironie, Konjunktiv) – immer mit <strong>Textbeleg (Zeilenangabe)</strong> und <strong>Wirkung</strong>!\n                <br>3. Intention des Autors &amp; Zielgruppe.", "<strong>Schluss:</strong> Zusammenfassung der wichtigsten Analyseergebnisse, Bewertung der Überzeugungskraft."], "sample": "„Der Autor bedient sich im zweiten Abschnitt einer auffallend kriegerischen Metaphorik, um die Konkurrenz auf dem Arbeitsmarkt zu dramatisieren. Formulierungen wie ‚Kampf um die besten Köpfe‘ (Z. 14) oder ‚Verteidigungslinie der Arbeitnehmerrechte‘ (Z. 19) erzeugen beim Leser das Bild einer unmittelbaren Bedrohung.\n\nUnterstützt wird diese Zuspitzung durch kurze, elliptische Sätze (vgl. Z. 22–24), die das Lesetempo erhöhen und Dringlichkeit vermitteln. Damit verfolgt der Verfasser das Ziel, das Publikum emotional zu mobilisieren und für eine rasche Reform des Arbeitsrechts zu gewinnen.“", "exercises": ["Analysieren Sie eine politische Kolumne hinsichtlich ihrer Argumentationsstruktur, Wortwahl und persuasiven Stilmittel.", "Untersuchen Sie einen zeitgenössischen literarischen Kurzprosatext in Bezug auf Erzählperspektive, Figurencharakterisierung und sprachliche Gestaltung.", "Analysieren Sie eine historische oder aktuelle Rede auf rhetorische Strategien zur Publikumsbindung und Emotionalisierung.", "Untersuchen Sie einen populärwissenschaftlichen Essay darauf, wie komplexe Fachinhalte für ein Laienpublikum aufbereitet werden.", "Analysieren Sie einen satirischen Kommentar und arbeiten Sie heraus, durch welche sprachlichen Mittel Ironie und Gesellschaftskritik erzeugt werden."]}, {"title": "6. Textinterpretation", "structure": ["<strong>Ziel:</strong> Erschließung tieferer Bedeutungsebenen (Motive, Symbolik, Konflikte) eines literarischen Textes (Kurzgeschichte, Gedicht, Dramenauszug).", "<strong>Einleitung:</strong> Basissatz (Autor, Titel, Gattung, Entstehungszeit) + Formulierung der zentralen <strong>Deutungshypothese</strong>.", "<strong>Hauptteil:</strong>\n                <br>– Inhalt &amp; Handlungsverlauf knapp skizzieren.\n                <br>– Figurenkonstellation, Raum- und Zeitgestaltung, Erzählverhalten.\n                <br>– Verknüpfung von Form/Sprache (Symbole, Leitmotive) mit der Deutungshypothese (stets am Text belegt!).", "<strong>Schluss:</strong> Rückbezug auf die Deutungshypothese (Bestätigung/Differenzierung) und Einordnung in einen größeren Kontext."], "sample": "„In der Kurzgeschichte ‚Die Küchenuhr‘ von Wolfgang Borchert aus dem Jahr 1947 steht die Bewältigung von Kriegstraumata und dem Verlust von Geborgenheit im Mittelpunkt.\n\nDas zentrale Dingsymbol der stehen gebliebenen Küchenuhr (vgl. Z. 18) verweist nicht bloß auf den Zeitpunkt des Bombenangriffs um halb drei, sondern symbolisiert das Ende der unbeschwerten Kindheit des Protagonisten. Während die Umwelt die Uhr als bloßen Sachschaden abtut, erkennt der junge Mann darin das letzte Relikt mütterlicher Fürsorge. Die karge, parataktische Sprache spiegelt die innere Sprachlosigkeit einer ganzen Nachkriegsgeneration wider.“", "exercises": ["Interpretieren Sie eine Kurzgeschichte der Nachkriegsliteratur (z. B. Borchert oder Böll) im Hinblick auf Kommunikationsstörungen zwischen den Figuren.", "Deuten Sie ein modernes Großstadtgedicht hinsichtlich der Darstellung von Entfremdung und Hektik durch Metaphorik und Metrum.", "Interpretieren Sie einen Dramenauszug (z. B. Dürrenmatt oder Frisch) mit Fokus auf den moralischen Konflikt der Hauptfigur.", "Untersuchen Sie eine Parabel (z. B. von Franz Kafka) und entwickeln Sie eine schlüssige Deutung der symbolischen Raum- und Machtstrukturen.", "Interpretieren Sie eine zeitgenössische Erzählung über Generationenkonflikte und arbeiten Sie die Bedeutung der Erzählperspektive heraus."]}, {"title": "7. Zusammenfassung", "structure": ["<strong>Ziel:</strong> Knappe, objektive Wiedergabe der Kernaussagen eines Ausgangstextes (ca. 1/3 der Originallänge).", "<strong>Einleitung:</strong> Basissatz (Autor, Titel, Textsorte, Erscheinungsdatum/-ort, Hauptthema).", "<strong>Hauptteil:</strong> Beschränkung auf das Wesentliche (keine Beispiele, keine wörtlichen Zitate, keine Details/Anekdoten), eigene Formulierungen, logische Verknüpfung, Präsens, indirekte Rede (Konjunktiv I) bei Meinungen.", "<strong>Schluss:</strong> Kurze Wiedergabe des Fazits des Ausgangstextes – <strong>strikt ohne eigene Meinung!</strong>"], "sample": "„In dem am 5. Mai 2026 in der Tageszeitung ‚Der Standard‘ erschienenen Sachartikel ‚Die Zukunft der Fernwärme‘ thematisiert die Journalistin Clara Weber den Ausbau klimaneutraler Heizsysteme in Ballungsräumen.\n\nZunächst erläutert die Autorin, dass fossile Heizsysteme einen erheblichen Anteil der städtischen Emissionen verursachen. Anschließend stellt sie Geothermie und industrielle Abwärme als zentrale Alternativen vor, weist jedoch darauf hin, dass hohe Investitionskosten und langwierige Genehmigungsverfahren den Ausbau bremsen. Abschließend betont Weber, dass das Gelingen der Wärmewende maßgeblich von langfristigen Fördermodellen abhänge.“", "exercises": ["Fassen Sie einen 600 Wörter langen Wissenschaftsartikel über Mikroplastik in Alpengewässern in maximal 180 Wörtern zusammen.", "Geben Sie die Kernaussagen eines Wirtschaftsbeitrags zum Fachkräftemangel in der österreichischen Metall- und Elektroindustrie strukturiert wieder.", "Fassen Sie einen psychologischen Essay über die Auswirkungen von Schlafmangel auf die Lernfähigkeit Jugendlicher sachlich zusammen.", "Erstellen Sie eine Zusammenfassung eines Gastkommentars zur Reform des Pensionssystems (ohne eigene Wertung).", "Fassen Sie einen Report über autonome Transportsysteme in der Logistikbranche in eigenen Worten zusammen."]}, {"title": "8. Empfehlung", "structure": ["<strong>Ziel:</strong> Begründeter Vorschlag für eine Entscheidung, Maßnahme, ein Buch/Projekt oder eine Anschaffung für einen bestimmten Adressatenkreis.", "<strong>Überschrift / Betreff:</strong> Klarer Hinweis auf das empfohlene Objekt/Vorhaben und die Zielgruppe.", "<strong>Einleitung:</strong> Anlass und Ausgangssituation (Warum wird eine Empfehlung ausgesprochen?).", "<strong>Hauptteil:</strong> Vorstellung der Option(en), kriteriengeleitete Abwägung von Vor- und Nachteilen, klare Begründung der Eignung für die Zielgruppe.", "<strong>Schluss:</strong> Konkrete Handlungsempfehlung und Ausblick auf den erwarteten Nutzen."], "sample": "<strong>Empfehlung zur Einführung digitaler Lernplattformen an Abendschulen</strong>\n\nAngesichts der hohen Doppelbelastung berufstätiger Studierender empfiehlt die Schülervertretung die flächendeckende Einführung einer einheitlichen Lernplattform mit aufgezeichneten Übungseinheiten.\n\nIm Vergleich zu losen Zettelsammlungen ermöglicht eine strukturierte Plattform das zeit- und ortsunabhängige Nachholen versäumter Einheiten. Zwar erfordert die Erstbefüllung durch die Lehrkräfte einen gewissen Mehraufwand, doch überwiegt langfristig die Zeitersparnis bei der Prüfungs- und Maturavorbereitung erheblich. Es wird daher empfohlen, bereits ab dem kommenden Semester ein Pilotprojekt in den Hauptfächern zu starten.", "exercises": ["Verfassen Sie für die Schulleitung eine Empfehlung zur Neugestaltung des Schulhofs unter ökologischen und sozialen Gesichtspunkten.", "Schreiben Sie für ein Jugendmagazin eine begründete Empfehlung für einen aktuellen Sachbuch-Bestseller zum Thema Finanzbildung.", "Erstellen Sie für die Geschäftsführung eines mittelständischen Betriebs eine Empfehlung zur Einführung eines betrieblichen Gesundheitsprogramms.", "Verfassen Sie für die Maturaklasse eine begründete Empfehlung für ein Reiseziel für die Maturareise anhand vorgegebener Kriterien (Budget, Kultur, Nachhaltigkeit).", "Schreiben Sie für den Gemeinderat eine Empfehlung zur Verbesserung der Radinfrastruktur zwischen Bahnhof und Schulzentrum."]}], "englisch": [{"title": "1. Essay (Opinion / For-and-Against Essay)", "structure": ["<strong>Register:</strong> Formal / semi-formal, objective, academic tone (no contractions like <em>don't</em>, no slang).", "<strong>Title:</strong> Neutral and informative (optional, unless requested).", "<strong>Introduction:</strong> General hook + background info + clear <strong>thesis statement</strong> outlining the essay's focus.", "<strong>Body Paragraphs (2–3):</strong> PEEL structure (<strong>P</strong>oint – <strong>E</strong>xplain – <strong>E</strong>xample – <strong>L</strong>ink). Present balanced arguments or defend your thesis logically.", "<strong>Conclusion:</strong> Restate thesis in new words, summarise main points, final thought (no new arguments!)."], "sample": "In recent decades, the rapid expansion of remote work has fundamentally reshaped traditional employment models. While working from home offers undeniable flexibility, its long-term impact on corporate culture remains controversial.\n\nOn the one hand, remote work eliminates daily commuting, thereby reducing carbon emissions and improving employees' work-life balance. Studies consistently indicate that autonomous workers report higher job satisfaction. On the other hand, prolonged physical separation can weaken team cohesion and hinder informal knowledge transfer among colleagues.\n\nIn conclusion, although remote work enhances individual flexibility, a hybrid model combining home office with regular on-site collaboration represents the most sustainable approach for modern businesses.", "exercises": ["Write an essay discussing whether university education should be completely free of charge for all students, regardless of their financial background.", "\"Social media platforms do more to divide society than to connect people.\" Discuss this statement in a well-structured essay.", "Write an essay examining the advantages and disadvantages of banning private cars from city centres.", "Should governments impose higher taxes on sugary drinks and fast food to combat public health issues? Write an essay presenting your view.", "Discuss the impact of artificial intelligence on future job markets and the skills young people need to acquire."]}, {"title": "2. Article (Newspaper / Magazine / Online)", "structure": ["<strong>Register:</strong> Semi-formal to informal (depends on target publication, e.g. youth magazine vs. newspaper), engaging and lively.", "<strong>Headline (+ Subheading):</strong> Catchy, intriguing, encourages the reader to continue.", "<strong>Introduction:</strong> Engaging hook (rhetorical question, surprising fact, short anecdote) + introduce topic.", "<strong>Body Paragraphs:</strong> Clear sub-topics, vivid descriptions, rhetorical questions, direct reader address (<em>\"Have you ever wondered...?\"</em>).", "<strong>Conclusion:</strong> Memorable closing thought, call to action, or punchy summary."], "sample": "<strong>Unplugged: Why Gen Z Is Rediscovering Dumbphones</strong>\n\nHave you ever checked your phone just to see the time, only to realize forty minutes later that you are still scrolling through random videos? You are certainly not alone.\n\nAcross Europe, a surprising trend is gaining momentum among teenagers and young adults: ditching high-end smartphones for basic flip phones. Tired of constant notifications and social comparison, many young people are craving genuine offline experiences. As 19-year-old student Clara puts it, \"Switching to a basic phone gave me my evenings—and my concentration—back.\"\n\nPerhaps true digital freedom does not mean having the latest device in your pocket, but knowing when to leave it behind.", "exercises": ["Write an article for an international student magazine about how volunteering abroad can change a young person's perspective on life.", "You are writing an article for your school's English newsletter titled \"Fitness Trends: Health Boost or Social Media Pressure?\".", "Write an article for an online lifestyle magazine exploring the rise of second-hand shopping and sustainable fashion among teenagers.", "Write an article for a local newspaper about how tourism affects small alpine communities in Austria.", "Write an engaging article for a youth magazine on why learning a practical trade is just as valuable as getting a university degree."]}, {"title": "3. Report", "structure": ["<strong>Register:</strong> Strictly formal, factual, objective, impersonal (use passive voice, avoid contractions).", "<strong>Header / Title:</strong> Clear title (or <em>To / From / Date / Subject</em> if specified).", "<strong>Section Headings:</strong> Mandatory! Organize every paragraph under clear headings (e.g., <em>Introduction, Current Situation, Key Findings, Recommendations</em>).", "<strong>Body:</strong> Present facts, survey results, strengths and weaknesses clearly (bullet points allowed sparingly).", "<strong>Conclusion / Recommendations:</strong> Actionable suggestions addressed to the superior/organisation."], "sample": "<strong>Report on the Introduction of a School Canteen Recycling System</strong>\n\n<strong>Introduction</strong>\nThe aim of this report is to evaluate the current waste management practices in the school canteen and to propose measures for reducing single-use plastic.\n\n<strong>Current Situation</strong>\nA survey conducted among 150 students revealed that over 70% purchase beverages in disposable plastic bottles daily. Furthermore, existing waste bins are inadequately labelled, resulting in poor waste separation.\n\n<strong>Recommendations</strong>\nTo address these issues, it is recommended that the school install water refill stations on every floor and introduce clearly colour-coded recycling bins. Implementing these steps would significantly lower waste volumes within one semester.", "exercises": ["Your headteacher has asked you to write a report on the effectiveness of digital devices in classrooms at your school, including recommendations for improvement.", "You recently completed a two-week work placement at an engineering company. Write a report for your school coordinator evaluating the experience.", "Write a report for the local town council assessing public transport connections for students commuting from surrounding villages.", "As a member of the student council, write a report evaluating last year's school sports day and suggesting changes for next year.", "Write a report for an international youth exchange organisation assessing the accommodation and cultural programme of a recent trip."]}, {"title": "4. Formal Email / Letter (Application, Complaint, Inquiry)", "structure": ["<strong>Register:</strong> Formal, polite, concise, professional (no slang, no contractions).", "<strong>Subject Line:</strong> Clear and specific (for emails).", "<strong>Salutation:</strong> <em>Dear Sir or Madam,</em> (unknown name) or <em>Dear Mr/Ms Smith,</em> (known name).", "<strong>Opening Paragraph:</strong> State your reason for writing immediately (<em>\"I am writing to apply for / complain about / inquire about...\"</em>).", "<strong>Body Paragraphs:</strong> Cover all bullet points from the prompt logically (qualifications, details of complaint, specific questions).", "<strong>Closing &amp; Sign-off:</strong> Polite closing formula (<em>\"I look forward to hearing from you.\"</em>) + <em>Yours faithfully,</em> (if Sir/Madam) or <em>Yours sincerely,</em> (if named)."], "sample": "<strong>Subject: Application for Summer Internship – Mechanical Engineering Department</strong>\n\nDear Ms Harrison,\n\nI am writing to express my strong interest in the summer internship advertised on your company's website. Currently, I am attending an evening technical college for mechanical and industrial engineering in Vienna, having previously completed a vocational school in metalworking.\n\nDuring my previous employment as a CNC machinist, I gained hands-on experience in quality control and precision manufacturing. I am confident that my technical background and disciplined work ethic would make me a valuable addition to your team.\n\nI have attached my CV and would welcome the opportunity for an interview. I look forward to hearing from you.\n\nYours sincerely,\nGerald Weber", "exercises": ["Write a formal email applying for a summer job as an outdoor activity instructor at an international youth camp in Scotland.", "You recently bought a laptop online that arrived damaged, and customer service has not responded. Write a formal letter of complaint requesting a replacement or refund.", "Write a formal email to a language school in Dublin inquiring about intensive B2/C1 summer courses, accommodation, and fees.", "Write a letter to the editor of a British newspaper responding to an article that criticised young people's environmental awareness.", "You booked a group trip for your class, but the hotel changed the conditions shortly before departure. Write a formal email demanding a solution."]}, {"title": "5. Informal Email / Letter", "structure": ["<strong>Register:</strong> Friendly, conversational, personal (contractions like <em>I'm, don't</em>, phrasal verbs, idioms, exclamation marks allowed).", "<strong>Salutation:</strong> <em>Hi Sarah, / Dear Tom,</em>", "<strong>Opening:</strong> Warm greeting, ask how they are, refer to previous contact (<em>\"Thanks so much for your last email!\"</em>).", "<strong>Body Paragraphs:</strong> Address all bullet points naturally, share personal anecdotes, ask questions, make suggestions.", "<strong>Closing &amp; Sign-off:</strong> Friendly wrap-up (<em>\"Write back soon!\", \"Can't wait to catch up!\"</em>) + <em>Best wishes, / Take care, / Cheers,</em> + First name."], "sample": "<strong>Subject: Awesome news + summer plans!</strong>\n\nHi Ben,\n\nHow's it going? Sorry it's taken me ages to get back to you, I've been totally swamped with exams and work lately!\n\nAnyway, I'm writing because I finally passed my final practical project and I'm planning a road trip to Hungary this August. Since you mentioned wanting to get away for a few days, why don't you join us? We're thinking of checking out Budapest and spending a couple of days chilling by the Danube.\n\nLet me know what you think so we can sort out the dates!\n\nTake care,\nGerry", "exercises": ["Your British penfriend is visiting Austria for the first time next month. Write an email recommending places to visit, local food to try, and what clothes to pack.", "Write an email to a friend who is stressed about upcoming final exams, sharing your best study routines and fitness tips to stay focused.", "You recently started a new part-time job alongside school. Write an email to your cousin describing your daily tasks, colleagues, and how you manage your time.", "Write an email to an exchange student you met last summer, inviting them to a music festival in Austria and explaining the travel arrangements.", "Your friend asked for advice on whether to take a gap year or go straight to university. Write an informal email sharing your honest thoughts."]}, {"title": "6. Blog Post / Blog Comment", "structure": ["<strong>Register:</strong> Semi-formal to informal, personal, interactive, authentic online voice.", "<strong>Blog Post Title:</strong> Catchy, relatable title (for a Blog Comment: directly reference the original post/author).", "<strong>Opening:</strong> Hook the online community immediately; share your personal connection to the topic.", "<strong>Body Paragraphs:</strong> Mix personal experiences with clear opinions; use rhetorical questions to spark discussion.", "<strong>Ending (Call to Action):</strong> Explicitly invite readers to comment and share their views (<em>\"What's your take on this? Drop a comment below!\"</em>)."], "sample": "<strong>Balancing Night School, Full-Time Work, and Fitness: Is It Actually Possible?</strong>\n\nLet's be real: there are days when my alarm goes off at 5:30 AM and hitting snooze feels like the only logical option. Between a full-time engineering job, evening classes, and hitting my weekly workout goals, time management isn't just a buzzword—it's survival.\n\nOver the past year, I've learned that consistency beats perfection every single time. Prepping meals on Sunday and keeping workouts short but intense has completely changed my energy levels.\n\nHow do you stay disciplined when your schedule gets crazy? Share your best hacks in the comments below!", "exercises": ["Write a blog post for a travel blog about why active outdoor holidays (like via ferrata climbing or hiking) beat all-inclusive beach resorts.", "Read a blog post claiming that video games are a complete waste of time and write a detailed blog comment defending the cognitive and social benefits of gaming.", "Write a blog post for a student blog sharing practical tips on how young people can save and invest money on a tight budget.", "Write a blog comment responding to an article about the pressure to look \"perfect\" on Instagram and TikTok.", "Write a blog post about digital minimalism and why you decided to cut down your daily screen time."]}]};
-
-    function renderMaturaTextsortenView() {
-      const list = maturaTextsorten[activeMaturaLang] || maturaTextsorten.deutsch;
-      return `
-        <div class="card">
-          <div class="tab-strip">
-            <button class="btn-secondary" style="${activeMaturaLang === 'deutsch' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeMaturaLang='deutsch'; renderView();">🇦🇹 Deutsch (8 Textsorten)</button>
-            <button class="btn-secondary" style="${activeMaturaLang === 'englisch' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeMaturaLang='englisch'; renderView();">🇬🇧 Englisch B2 (6 Textsorten)</button>
-          </div>
-          <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-            Klicke auf eine Textsorte, um Aufbau, Musterbeispiel und alle 5 Matura-Übungsaufgaben aufzuklappen.
-          </p>
-          ${list.map((item, idx) => `
-            <details class="ts-item" ${idx === 0 ? "open" : ""}>
-              <summary>${item.title}</summary>
-              <div class="ts-body">
-                <div class="ts-cols">
-                  <div class="ts-panel">
-                    <h5>Aufbau &amp; Merkmale</h5>
-                    <ul>${item.structure.map(s => `<li>${s}</li>`).join("")}</ul>
-                  </div>
-                  <div class="ts-panel">
-                    <h5>Musterbeispiel</h5>
-                    <div class="sample-quote">${item.sample}</div>
-                  </div>
-                </div>
-                <div class="ts-panel">
-                  <h5>5 Matura-Übungsbeispiele</h5>
-                  <ol>${item.exercises.map(ex => `<li>${ex}</li>`).join("")}</ol>
-                </div>
-              </div>
-            </details>
-          `).join("")}
-        </div>
-      `;
-    }
-
-    let currentDerivativeTask = null;
-
-    function generateDerivativeTask() {
-      const selectedLevel = document.getElementById("derivLevel")?.value || "poly";
-      const levels = ["poly", "chain", "exp"];
-      const level = selectedLevel === "all" ? levels[Math.floor(Math.random() * levels.length)] : selectedLevel;
-      let fnText = "", derivText = "", hintText = "", badgeText = "";
-      const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-      if (level === "poly") {
-        const a = rand(2, 6), n = rand(2, 5), b = rand(2, 9);
-        fnText = `f(x) = ${a}x^${n} + ${b}x`;
-        derivText = `${a * n}x^${n - 1} + ${b}`;
-        hintText = `Potenzregel: (${a}·${n})x^(${n}-1) + ${b}`;
-        badgeText = "Polynom / Potenzregel";
-      } else if (level === "chain") {
-        const a = rand(2, 5), k = rand(2, 4);
-        fnText = `f(x) = ${a} · sin(${k}x)`;
-        derivText = `${a * k}cos(${k}x)`;
-        hintText = `Kettenregel: Innere Ableitung (${k}) · äußere Ableitung (${a}·cos(${k}x))`;
-        badgeText = "Sinus & Kettenregel";
-      } else {
-        const a = rand(2, 6), k = rand(2, 5);
-        fnText = `f(x) = ${a} · e^(${k}x)`;
-        derivText = `${a * k}e^(${k}x)`;
-        hintText = `Exponential- & Kettenregel: ${a} · ${k} · e^(${k}x)`;
-        badgeText = "e-Funktion & Kettenregel";
-      }
-
-      currentDerivativeTask = { fnText, derivText, hintText };
-      const box = document.getElementById("derivTaskDisplay");
-      if (box) {
-        box.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-            <span style="font-size:13px; color:var(--text-muted);">Bilde die 1. Ableitung f'(x) für:</span>
-            ${selectedLevel === "all" ? `<span class="count-pill">🎲 Mix: ${badgeText}</span>` : ""}
-          </div>
-          <div class="formula-box" style="font-size:20px;">${fnText}</div>
-          <label style="font-size:13px; font-weight:600;">Deine Lösung für f'(x) (z. B. 12x^2 + 4):</label>
-          <input type="text" id="derivUserAnswer" class="input-field" placeholder="f'(x) eingeben...">
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="btn-primary" onclick="checkDerivativeAnswer()">✅ Prüfen</button>
-            <button class="btn-secondary" onclick="showDerivativeSolution()">💡 Lösung anzeigen</button>
-            <button class="btn-secondary" onclick="generateDerivativeTask()">🔄 Neue Aufgabe</button>
-          </div>
-          <div id="derivFeedback"></div>
-        `;
-      }
-    }
-
-    function normalizeMath(str) {
-      return str.toLowerCase().replace(/\s+/g, "").replace(/\*/g, "").replace(/\^1(?!\d)/g, "");
-    }
-
-    function checkDerivativeAnswer() {
-      const userVal = normalizeMath(document.getElementById("derivUserAnswer").value);
-      const correctVal = normalizeMath(currentDerivativeTask.derivText);
-      const fb = document.getElementById("derivFeedback");
-      if (!userVal) return;
-
-      if (userVal === correctVal) {
-        currentUser.points += 15;
-        saveUsers();
-        renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben. (${currentDerivativeTask.hintText})</div>`;
-      } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Noch nicht ganz. Tipp: ${currentDerivativeTask.hintText}</div>`;
-      }
-    }
-
-    function showDerivativeSolution() {
-      document.getElementById("derivFeedback").innerHTML =
-        `<div class="result-banner" style="background:var(--accent-soft); color:var(--accent);">Musterlösung: <strong>f'(x) = ${currentDerivativeTask.derivText}</strong><br><span style="font-size:12px; font-weight:400;">${currentDerivativeTask.hintText}</span></div>`;
-    }
-
-    let activeCalcTab = "cutting";
-    function renderCalculatorContent() {
-      if (activeCalcTab === "cutting") {
-        return `
-          <h4>⚙️ Schnittgeschwindigkeit & Drehzahl (Zerspanung)</h4>
-          <div class="formula-box">n = (v_c · 1000) / (d · π)</div>
-          <div class="form-grid-2">
-            <div><label style="font-size:13px; font-weight:600;">Schnittgeschwindigkeit v_c [m/min]</label><input type="number" id="calcVc" class="input-field" value="180"></div>
-            <div><label style="font-size:13px; font-weight:600;">Durchmesser d [mm]</label><input type="number" id="calcD" class="input-field" value="40"></div>
-          </div>
-          <button class="btn-primary" onclick="calcCuttingSpeed()">Drehzahl n berechnen</button>
-          <div id="calcResultBox"></div>
-        `;
-      } else if (activeCalcTab === "ohm") {
-        return `
-          <h4>⚡ Ohmsches Gesetz & Elektrische Leistung</h4>
-          <div class="formula-box">I = U / R   |   P = U · I</div>
-          <div class="form-grid-2">
-            <div><label style="font-size:13px; font-weight:600;">Spannung U [Volt]</label><input type="number" id="calcU" class="input-field" value="230"></div>
-            <div><label style="font-size:13px; font-weight:600;">Widerstand R [Ohm]</label><input type="number" id="calcR" class="input-field" value="46"></div>
-          </div>
-          <button class="btn-primary" onclick="calcOhm()">Strom & Leistung berechnen</button>
-          <div id="calcResultBox"></div>
-        `;
-      } else {
-        return `
-          <h4>📐 Quadratische Gleichung</h4>
-          <div class="formula-box">a·x² + b·x + c = 0   →   x₁,₂ = (-b ± √(b² - 4ac)) / (2a)</div>
-          <div class="form-grid-2" style="grid-template-columns: repeat(3, 1fr);">
-            <div><label style="font-size:13px; font-weight:600;">a</label><input type="number" id="calcA" class="input-field" value="1"></div>
-            <div><label style="font-size:13px; font-weight:600;">b</label><input type="number" id="calcB" class="input-field" value="-5"></div>
-            <div><label style="font-size:13px; font-weight:600;">c</label><input type="number" id="calcC" class="input-field" value="6"></div>
-          </div>
-          <button class="btn-primary" onclick="calcQuadratic()">Nullstellen x₁, x₂ berechnen</button>
-          <div id="calcResultBox"></div>
-        `;
-      }
-    }
-
-    function calcCuttingSpeed() {
-      const vc = parseFloat(document.getElementById("calcVc").value);
-      const d = parseFloat(document.getElementById("calcD").value);
-      if (!vc || !d || d <= 0) return;
-      document.getElementById("calcResultBox").innerHTML = `<div class="result-banner result-ok">Drehzahl n = ${((vc * 1000) / (d * Math.PI)).toFixed(1)} 1/min</div>`;
-    }
-    function calcOhm() {
-      const u = parseFloat(document.getElementById("calcU").value);
-      const r = parseFloat(document.getElementById("calcR").value);
-      if (!r || r <= 0) return;
-      const i = u / r;
-      document.getElementById("calcResultBox").innerHTML = `<div class="result-banner result-ok">Strom I = ${i.toFixed(2)} A  |  Leistung P = ${(u * i).toFixed(1)} W</div>`;
-    }
-    function calcQuadratic() {
-      const a = parseFloat(document.getElementById("calcA").value);
-      const b = parseFloat(document.getElementById("calcB").value);
-      const c = parseFloat(document.getElementById("calcC").value);
-      if (!a) return;
-      const disc = b * b - 4 * a * c;
-      const box = document.getElementById("calcResultBox");
-      if (disc < 0) box.innerHTML = `<div class="result-banner result-err">Keine reelle Lösung (D = ${disc.toFixed(2)} < 0)</div>`;
-      else box.innerHTML = `<div class="result-banner result-ok">x₁ = ${((-b + Math.sqrt(disc)) / (2 * a)).toFixed(3)}   |   x₂ = ${((-b - Math.sqrt(disc)) / (2 * a)).toFixed(3)}</div>`;
-    }
-
-    /* ==========================================================
-       7. FRAGEN IN UNTERORDNER EINFÜGEN & LÖSEN
-       ========================================================== */
-    function addQuestionToFolder(subId, folderId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen erstellen.");
-      const sub = subjects.find(s => s.id === subId);
-      const folder = sub.folders.find(f => f.id === folderId);
-      const type = document.getElementById("newQType").value;
-      const qText = document.getElementById("newQText").value.trim();
-      const explanation = document.getElementById("newQExpl").value.trim() || "Keine Erklärung hinterlegt.";
-      if (!qText) return alert("Bitte gib eine Fragestellung ein!");
-
-      if (type === "mc") {
-        const opts = [
-          document.getElementById("newQOpt1").value.trim(),
-          document.getElementById("newQOpt2").value.trim(),
-          document.getElementById("newQOpt3").value.trim(),
-          document.getElementById("newQOpt4").value.trim()
-        ].filter(Boolean);
-        const correctIdx = parseInt(document.getElementById("newQCorrectIdx").value, 10);
-        if (opts.length < 2) return alert("Bitte mindestens 2 Antwortmöglichkeiten eingeben.");
-        folder.questions.push({ id: "q-" + Date.now(), type: "mc", question: qText, options: opts, correct: opts[correctIdx] || opts[0], explanation });
-      } else {
-        const ans = document.getElementById("newQCalcAns").value.trim();
-        if (!ans) return alert("Bitte das richtige Ergebnis eingeben.");
-        folder.questions.push({ id: "q-" + Date.now(), type: "calc", question: qText, answer: ans, explanation });
-      }
-
-      saveSubjects();
-      renderSidebar();
-      renderView();
-    }
-
-    function deleteQuestionFromFolder(subId, folderId, qId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen löschen.");
-      const sub = subjects.find(s => s.id === subId);
-      const folder = sub.folders.find(f => f.id === folderId);
-      folder.questions = folder.questions.filter(q => q.id !== qId);
-      saveSubjects();
-      renderView();
-    }
-
-    function toggleFavoriteSubject(subId, evt) {
-      if (evt) evt.stopPropagation();
-      const sub = subjects.find(s => s.id === subId);
-      if (!sub) return;
-      sub.favorite = !sub.favorite;
-      saveSubjects();
-      renderSidebar();
-      renderView();
-    }
-
-    function createNewFolder(subId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Unterordner erstellen.");
-      const sub = subjects.find(s => s.id === subId);
-      const name = document.getElementById("newFolderNameInput").value.trim();
-      if (!name) return;
-      sub.folders.push({ id: "f-" + Date.now(), name, questions: [] });
-      saveSubjects();
-      renderSidebar();
-      renderView();
-    }
-
-    function checkFolderQuestion(qId, expected, explanation) {
-      const val = document.getElementById("ans-" + qId).value.trim().replace(",", ".");
-      const exp = expected.trim().replace(",", ".");
-      const fb = document.getElementById("fb-" + qId);
-      if (val.toLowerCase() === exp.toLowerCase()) {
-        currentUser.points += 10;
-        saveUsers();
-        renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt) – ${explanation}</div>`;
-      } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig wäre: ${expected}) – ${explanation}</div>`;
-      }
-    }
-
-    function checkMcQuestion(qId, chosen, expected, explanation) {
-      const fb = document.getElementById("fb-" + qId);
-      if (chosen === expected) {
-        currentUser.points += 10;
-        saveUsers();
-        renderSidebar();
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt) – ${explanation}</div>`;
-      } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expected}) – ${explanation}</div>`;
-      }
-    }
-
-    /* ==========================================================
-       8. ANSICHTEN RENDERN
-       ========================================================== */
-    function renderView() {
-      const container = document.getElementById("viewContainer");
-      const heading = document.getElementById("pageHeading");
-      const visible = getVisibleSubjects();
-
-      if (currentView === "home") {
-        heading.innerText = "🏠 Startseite";
-        const favs = visible.filter(s => s.favorite);
-        container.innerHTML = `
-          <div class="exam-warning-card">
-            <div class="exam-warning-top">
-              <strong>⏳ PRÜFUNGEN IN DEN NÄCHSTEN 7 TAGEN</strong>
-              <span>Alle weiteren Termine oben rechts im Kalender</span>
-            </div>
-            <div class="exam-item-box">
-              <div>
-                <div style="font-size:12px; color:#b45309; font-weight:700;">Fertigungstechnik • 2026-11-23</div>
-                <div style="font-weight:800; font-size:15px; margin-top:2px;">FET Test 1 (Wärmebehandlung & Guss)</div>
-              </div>
-              <span class="days-badge">in 4 Tagen</span>
-            </div>
-          </div>
-
-          <div class="form-grid-2" style="margin-bottom:20px;">
-            <div class="card" style="margin-bottom:0; display:flex; gap:14px; align-items:flex-start;">
-              <div style="width:44px; height:44px; border-radius:12px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">🎓</div>
-              <div>
-                <h3 style="font-size:16px; margin-bottom:4px;">Eigene Prüfung starten</h3>
-                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Fragen aus deinen Fächern und Unterordnern üben.</p>
-                <button class="btn-primary" onclick="navigate('custom-exam')">Prüfung starten →</button>
-              </div>
-            </div>
-
-            <div class="card" style="margin-bottom:0; display:flex; gap:14px; align-items:flex-start;">
-              <div style="width:44px; height:44px; border-radius:12px; background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">📈</div>
-              <div>
-                <h3 style="font-size:16px; margin-bottom:4px;">Ableitungstrainer & Rechner</h3>
-                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Endlos-Aufgaben für f'(x) und technische Formelrechner.</p>
-                <button class="btn-secondary" onclick="navigate('derivative-trainer')">Trainer öffnen →</button>
-              </div>
-            </div>
-          </div>
-
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-            <div>
-              <h3 style="font-size:17px;">⭐ Favorisierte Ordner & Themen</h3>
-              <p style="font-size:13px; color:var(--text-muted);">Klicke auf ein Fach, um Unterordner zu öffnen oder neue Fragen hinzuzufügen.</p>
-            </div>
-            <span style="font-size:13px; font-weight:700; color:var(--accent);">${favs.length} Favoriten</span>
-          </div>
-
-          ${favs.length === 0 ? `<div class="card" style="margin-top:12px; font-size:13px; color:var(--text-muted);">Noch keine Favoriten ausgewählt. Klicke im Menü links oder in einem Fach auf das ⭐-Symbol, um Fächer hier anzupinnen.</div>` : ""}
-          <div class="fav-grid">
-            ${favs.map(sub => {
-              const totalQ = sub.folders.reduce((acc, f) => acc + f.questions.length, 0);
-              return `
-                <div class="fav-card" style="border-top-color:${sub.color};">
-                  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div style="display:flex; gap:12px; align-items:center;">
-                      <div style="width:42px; height:42px; border-radius:10px; background:var(--bg-input); display:flex; align-items:center; justify-content:center; font-size:20px;">${sub.icon}</div>
-                      <div>
-                        <div style="font-size:11px; font-weight:700; color:var(--text-muted);">${sub.category}</div>
-                        <div style="font-weight:800; font-size:16px;">${sub.name}</div>
-                      </div>
-                    </div>
-                    <button onclick="toggleFavoriteSubject('${sub.id}', event)" title="Favorit entfernen" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px;">⭐</button>
-                  </div>
-                  <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="count-pill">${sub.folders.length} Ordner • ${totalQ} Fragen</span>
-                    <button class="nav-item" style="width:auto; color:var(--accent); padding:4px 8px;" onclick="navigate('subject-${sub.id}')">Öffnen →</button>
-                  </div>
-                </div>
-              `;
-            }).join("")}
-          </div>
-        `;
-      }
-      else if (currentView === "derivative-trainer") {
-        heading.innerText = "📈 Ableitungstrainer";
-        container.innerHTML = `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
-              <div>
-                <h3>Interaktiver Ableitungstrainer</h3>
-                <p style="font-size:13px; color:var(--text-muted);">Trainiere Potenz-, Ketten- und Exponentialregeln mit direkter Kontrolle.</p>
-              </div>
-              <select id="derivLevel" class="select-field" style="width:auto; margin:0;" onchange="generateDerivativeTask()">
-                <option value="poly">Level 1: Polynome (Potenzregel)</option>
-                <option value="chain">Level 2: Sinus & Kettenregel</option>
-                <option value="exp">Level 3: e-Funktion & Kettenregel</option>
-                <option value="all">Level 4: Alle Level gemischt</option>
-              </select>
-            </div>
-            <div id="derivTaskDisplay"></div>
-          </div>
-          ${renderSpickzettelAbleitungenCard()}
-        `;
-        generateDerivativeTask();
-      }
-      else if (currentView === "matura-textsorten") {
-        heading.innerText = "📝 Matura-Textsorten (Deutsch & Englisch)";
-        container.innerHTML = renderMaturaTextsortenView();
-      }
-      else if (currentView === "formulas") {
-        heading.innerText = "📐 Formelsammlung & Rechner";
-        container.innerHTML = `
-          <div class="card">
-            <div class="tab-strip">
-              <button class="btn-secondary" style="${activeCalcTab === 'cutting' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='cutting'; renderView();">⚙️ Zerspanung (n / v_c)</button>
-              <button class="btn-secondary" style="${activeCalcTab === 'ohm' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='ohm'; renderView();">⚡ Elektrotechnik (U / R / I)</button>
-              <button class="btn-secondary" style="${activeCalcTab === 'quad' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='quad'; renderView();">📐 Quadratische Gleichung</button>
-              <button class="btn-secondary" style="${activeCalcTab === 'ai-custom' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="activeCalcTab='ai-custom'; renderView();">🤖 KI-Formeln (${customFormulas.length})</button>
-            </div>
-            ${activeCalcTab === 'ai-custom' ? `
-              ${customFormulas.length === 0
-                ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Noch keine KI-Formeln eingefügt. Nutze unten das Feld, um erstellten Formel-Code einzufügen.</p>`
-                : customFormulas.map(cf => `
-                  <div class="question-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                      <span class="count-pill">${cf.category}</span>
-                      ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${cf.id}')">Löschen</button>` : ""}
-                    </div>
-                    <h4 style="margin-top:6px;">${cf.title}</h4>
-                    <div class="formula-box">${cf.formula}</div>
-                    ${cf.description ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">${cf.description}</p>` : ""}
-                    <div class="form-grid-2">
-                      <div><label style="font-size:12px; font-weight:600;">${cf.var1Label}</label><input type="number" id="cfv1-${cf.id}" class="input-field" value="${cf.var1Default}"></div>
-                      <div><label style="font-size:12px; font-weight:600;">${cf.var2Label}</label><input type="number" id="cfv2-${cf.id}" class="input-field" value="${cf.var2Default}"></div>
-                    </div>
-                    <button class="btn-primary" onclick="runCustomFormulaCalc('${cf.id}')">Berechnen</button>
-                    <div id="cfres-${cf.id}"></div>
-                  </div>
-                `).join("")
-              }
-            ` : renderCalculatorContent()}
-
-            ${renderSpickzettelAbleitungenCard()}
-
-            ${isAdmin() ? `
-            <div class="ai-code-box">
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                <div>
-                  <strong style="font-size:14px;">🤖 KI-Code für neue Formeln einfügen (nur Admin)</strong>
-                  <div style="font-size:12px; color:var(--text-muted);">Füge den generierten Formel-Code einfach hier ein – der Rechner wird automatisch angelegt.</div>
-                </div>
-                <button class="btn-secondary" onclick="copyAiPromptForFormula()">📋 Formel-Prompt kopieren</button>
-              </div>
-              <textarea id="aiFormulaCodeArea" class="code-textarea" placeholder='{"title":"Drehmoment","category":"Mechanik","formula":"M = F · l","description":"Hebelgesetz","var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}'></textarea>
-              <button class="btn-primary" onclick="importAiFormulaCode()">⚡ Formel-Code direkt einfügen</button>
-              <div id="aiFormulaMsg"></div>
-            </div>
-            ` : ""}
-          </div>
-        `;
-      }
-      else if (currentView === "custom-exam") {
-        heading.innerText = "🎓 Eigene Prüfung";
-        const allQuestions = [];
-        visible.forEach(s => s.folders.forEach(f => f.questions.forEach(q => allQuestions.push({ ...q, subjectName: s.name, folderName: f.name }))));
-        container.innerHTML = `
-          <div class="card">
-            <h3 style="margin-bottom:4px;">Prüfungssimulation (${allQuestions.length} verfügbare Fragen)</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">Beantworte die Fragen aus allen für dich freigeschalteten Fächern.</p>
-            ${allQuestions.map((q, idx) => renderQuestionBlock(q, idx + 1, false)).join("")}
-          </div>
-        `;
-      }
-      else if (currentView.startsWith("subject-")) {
-        const subId = currentView.replace("subject-", "");
-        const sub = subjects.find(s => s.id === subId);
-        if (!sub) return;
-        heading.innerText = `${sub.icon} ${sub.name}`;
-
-        if (!activeFolderId && sub.folders.length > 0) activeFolderId = sub.folders[0].id;
-        const currentFolder = sub.folders.find(f => f.id === activeFolderId);
-
-        container.innerHTML = `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-              <div>
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="count-pill">${sub.category}</span>
-                  <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleFavoriteSubject('${sub.id}', event)">
-                    ${sub.favorite ? '⭐ Favorisiert (Entfernen)' : '☆ Als Favorit merken'}
-                  </button>
-                </div>
-                <h3 style="margin-top:8px;">Unterordner in ${sub.name}</h3>
-              </div>
-              ${isAdmin() ? `
-              <div style="display:flex; gap:8px;">
-                <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:190px;" placeholder="Neuer Unterordner...">
-                <button class="btn-primary" onclick="createNewFolder('${sub.id}')">+ Ordner</button>
-              </div>
-              ` : ""}
-            </div>
-
-            <div class="tab-strip">
-              ${sub.folders.map(f => `
-                <button class="btn-secondary"
-                        style="${f.id === activeFolderId ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
-                        onclick="activeFolderId='${f.id}'; renderView();">
-                  📁 ${f.name} (${f.questions.length})
-                </button>
-              `).join("")}
-            </div>
-
-            ${currentFolder ? `
-              <h4 style="margin-bottom:12px;">Fragen im Ordner „${currentFolder.name}“</h4>
-              ${currentFolder.questions.length === 0
-                ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">Noch keine Fragen in diesem Unterordner. Füge unten direkt eine neue Frage hinzu!</p>`
-                : currentFolder.questions.map((q, i) => renderQuestionBlock(q, i + 1, isAdmin(), sub.id, currentFolder.id)).join("")
-              }
-
-              ${(sub.id === "deutsch" || sub.id === "englisch") ? `
-                <div style="margin-top:18px; padding:14px 16px; background:var(--bg-input); border:1px solid var(--border); border-radius:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                  <div>
-                    <strong>📝 Matura-Textsorten (${sub.id === "deutsch" ? "8 Textsorten" : "6 B2 Text Types"})</strong>
-                    <div style="font-size:12px; color:var(--text-muted);">Kompletter Aufbau, Musterbeispiele &amp; jeweils 5 Matura-Übungsaufgaben ansehen.</div>
-                  </div>
-                  <button class="btn-primary" onclick="activeMaturaLang='${sub.id}'; navigate('matura-textsorten');">Textsorten öffnen →</button>
-                </div>
-              ` : ""}
-
-              ${isAdmin() ? `
-              <div style="margin-top:24px; padding-top:18px; border-top:1px solid var(--border);">
-                <h4 style="margin-bottom:10px;">➕ Neue Frage in „${currentFolder.name}“ einfügen (nur Admin)</h4>
-                <div class="form-grid-2">
-                  <div>
-                    <label style="font-size:13px; font-weight:600;">Fragetyp</label>
-                    <select id="newQType" class="select-field" onchange="toggleNewQuestionFields()">
-                      <option value="mc">Multiple Choice (4 Antworten)</option>
-                      <option value="calc">Rechen- / Kurzantwort</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style="font-size:13px; font-weight:600;">Fragestellung</label>
-                    <input type="text" id="newQText" class="input-field" placeholder="z. B. Berechne die Schnittgeschwindigkeit...">
-                  </div>
-                </div>
-
-                <div id="mcFieldsBox">
-                  <div class="form-grid-2">
-                    <input type="text" id="newQOpt1" class="input-field" placeholder="Antwort A">
-                    <input type="text" id="newQOpt2" class="input-field" placeholder="Antwort B">
-                    <input type="text" id="newQOpt3" class="input-field" placeholder="Antwort C">
-                    <input type="text" id="newQOpt4" class="input-field" placeholder="Antwort D">
-                  </div>
-                  <label style="font-size:13px; font-weight:600;">Welche Antwort ist richtig?</label>
-                  <select id="newQCorrectIdx" class="select-field">
-                    <option value="0">Antwort A</option>
-                    <option value="1">Antwort B</option>
-                    <option value="2">Antwort C</option>
-                    <option value="3">Antwort D</option>
-                  </select>
-                </div>
-
-                <div id="calcFieldsBox" style="display:none;">
-                  <label style="font-size:13px; font-weight:600;">Exakte Lösung (Zahl oder kurzer Begriff)</label>
-                  <input type="text" id="newQCalcAns" class="input-field" placeholder="z. B. 42 oder Martensit">
-                </div>
-
-                <label style="font-size:13px; font-weight:600;">Lösungsweg / Erklärung (optional)</label>
-                <input type="text" id="newQExpl" class="input-field" placeholder="Kurze Erklärung für die Auswertung...">
-
-
-                <button class="btn-primary" onclick="addQuestionToFolder('${sub.id}', '${currentFolder.id}')">💾 Frage im Unterordner speichern</button>
-
-                <!-- KI-CODE EINFÜGEN FÜR FRAGEN -->
-                <div class="ai-code-box">
-                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div>
-                      <strong style="font-size:14px;">🤖 KI-Code für Fragen einfügen</strong>
-                      <div style="font-size:12px; color:var(--text-muted);">Füge hier einfach den von der KI erstellten Fragen-Code ein – den Rest erledigt das System.</div>
-                    </div>
-                    <button class="btn-secondary" onclick="copyAiPromptForFolder('${sub.name.replace(/'/g, "\'")}', '${currentFolder.name.replace(/'/g, "\'")}')">📋 KI-Prompt kopieren</button>
-                  </div>
-                  <textarea id="aiCodePasteArea" class="code-textarea" placeholder='[{"type":"mc","question":"Frage...","options":["A","B","C","D"],"correct":"A","explanation":"Erklärung"}]'></textarea>
-                  <button class="btn-primary" onclick="importAiQuestionsToFolder('${sub.id}', '${currentFolder.id}')">⚡ Fragen-Code direkt einfügen</button>
-                  <div id="aiImportMsg"></div>
-                </div>
-
-              </div>
-              ` : ""}
-            ` : ""}
-          </div>
-        `;
-      }
-      else if (currentView === "settings") {
-        heading.innerText = "⚙️ Einstellungen & Passwort";
-        const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-        const currentAccent = localStorage.getItem("lmg_accent") || "#2563eb";
-        const colors = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
-
-        container.innerHTML = `
-          <div class="card">
-            <h3 style="margin-bottom:4px;">Darstellung & Design</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Deine Auswahl wird automatisch gespeichert.</p>
-
-            <div class="setting-row">
-              <div>
-                <strong>Farbmodus (Light / Dark Mode)</strong>
-                <div style="font-size:13px; color:var(--text-muted);">Wechsle zwischen hellem Tagesmodus und dunklem Nachtmodus.</div>
-              </div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="setTheme('light')">☀️ Light Mode</button>
-                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="setTheme('dark')">🌙 Dark Mode</button>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <strong>Akzentfarbe der Website</strong>
-                <div style="font-size:13px; color:var(--text-muted);">Bestimmt die Farbe von Buttons, Icons und aktiven Reitern.</div>
-              </div>
-              <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                ${colors.map(c => `
-                  <div class="swatch ${c.toLowerCase() === currentAccent.toLowerCase() ? 'active' : ''}"
-                       style="background:${c};"
-                       onclick="setAccentColor('${c}')"></div>
-                `).join("")}
-                <input type="color" value="${currentAccent}" onchange="setAccentColor(this.value)" style="width:34px; height:34px; border:none; background:none; cursor:pointer;" title="Eigene Farbe">
-              </div>
-            </div>
-          </div>
-
-          <!-- PERSÖNLICHES PASSWORT ÄNDERN -->
-          <div class="card">
-            <h3 style="margin-bottom:4px;">🔑 Eigenes Passwort ändern</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Angemeldet als <strong>${currentUser.name}</strong> (${currentUser.email}). Hier kannst du dein persönliches Login-Passwort jederzeit ändern.
-            </p>
-            <div class="form-grid-2">
-              <div>
-                <label style="font-size:13px; font-weight:600;">Neues Passwort</label>
-                <input type="password" id="settingsNewPwd1" class="input-field" placeholder="Neues Passwort...">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Neues Passwort bestätigen</label>
-                <input type="password" id="settingsNewPwd2" class="input-field" placeholder="Wiederholen...">
-              </div>
-            </div>
-            <button class="btn-primary" onclick="changeOwnPasswordFromSettings()">Passwort aktualisieren</button>
-            <div id="settingsPwdMsg"></div>
-          </div>
-        `;
-      }
-      else if (currentView === "admin") {
-        if (!isAdmin()) {
-          currentView = "home";
-          renderView();
-          return;
-        }
-        heading.innerText = "🛡️ Admin: Benutzer & Kurse";
-        container.innerHTML = `
-          <!-- 1. BENUTZER & INITIALPASSWÖRTER ANLEGEN -->
-          <div class="card">
-            <h3 style="margin-bottom:4px;">👤 Benutzer & Initialpasswörter verwalten</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
-              Lege neue Teilnehmer mit Name und Initialpasswort an. Beim ersten Einloggen werden sie automatisch aufgefordert, ein eigenes Passwort zu setzen.
-            </p>
-
-            <div class="form-grid-2">
-              <div>
-                <label style="font-size:13px; font-weight:600;">Name des Benutzers *</label>
-                <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Florian K.">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Initialpasswort *</label>
-                <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. FLO-2026">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">E-Mail-Adresse (optional)</label>
-                <input type="email" id="adminNewUserEmail" class="input-field" placeholder="wird sonst automatisch erstellt">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Rolle</label>
-                <select id="adminNewUserRole" class="select-field">
-                  <option value="Schüler">Schüler</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
-            </div>
-            <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer mit Initialpasswort anlegen</button>
-
-            <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px;">
-              <h4 style="margin-bottom:10px;">Registrierte Teilnehmer (${users.length})</h4>
-              ${users.map(u => `
-                <div class="setting-row">
-                  <div>
-                    <strong>${u.name}</strong> <span class="role-badge">${u.role}</span>
-                    <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
-                      Login: <code>${u.email}</code> ·
-                      ${u.mustChangePassword
-                        ? `<span style="color:#b45309; font-weight:700;">Initialpasswort aktiv: <code>${u.password}</code> (noch nicht geändert)</span>`
-                        : `<span style="color:#16a34a; font-weight:700;">Eigenes Passwort gesetzt ✓</span>`
-                      }
-                    </div>
-                  </div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    ${u.id !== currentUser.id ? `<button class="btn-secondary" onclick="adminToggleUserRole(${u.id})">${u.role === 'Admin' ? '⬇️ Admin entziehen' : '🛡️ Zum Admin machen'}</button>` : ""}
-                    <button class="btn-secondary" onclick="adminResetUserPassword(${u.id})">🔑 Neues Initialpasswort</button>
-                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Entfernen</button>` : ""}
-                  </div>
-                </div>
-              `).join("")}
-            </div>
-          </div>
-
-          <!-- 2. FÄCHER & KURSFREIGABEN -->
-          <div class="card">
-            <h3 style="margin-bottom:4px;">📚 Fächer & Kurse für Teilnehmer freischalten</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
-              Lege fest, ob ein Fach für <strong>alle Schüler</strong> sichtbar ist oder nur für ausgewählte Personen.
-            </p>
-
-            ${subjects.map(sub => {
-              const badgeText = sub.accessAll
-                ? "🌍 Alle Teilnehmer freigeschaltet"
-                : `👤 Nur ${sub.allowedUsers.length} ausgewählte Person(en)`;
-              return `
-                <div class="setting-row">
-                  <div>
-                    <strong>${sub.icon} ${sub.name}</strong>
-                    <div style="font-size:12px; color:var(--accent); font-weight:600; margin-top:3px;">${badgeText}</div>
-                  </div>
-                  <button class="btn-secondary" onclick="openSubjectAccessEditor('${sub.id}')">Freigabe bearbeiten</button>
-                </div>
-              `;
-            }).join("")}
-
-            <div id="accessEditorBox" style="display:none; margin-top:20px; padding:16px; background:var(--bg-input); border:1px solid var(--border); border-radius:12px;">
-              <h4 id="accessEditorTitle" style="margin-bottom:10px;">Freigabe bearbeiten</h4>
-              <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-                <button class="btn-primary" onclick="selectAllStudents(true)">✅ Alle auswählen</button>
-                <button class="btn-secondary" onclick="selectAllStudents(false)">❌ Auswahl aufheben</button>
-              </div>
-              <div id="studentCheckboxes" class="user-checkbox-grid"></div>
-              <div style="margin-top:14px; display:flex; justify-content:flex-end; gap:8px;">
-                <button class="btn-secondary" onclick="document.getElementById('accessEditorBox').style.display='none'">Abbrechen</button>
-                <button class="btn-primary" onclick="saveSubjectAccess()">Speichern</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        MathJax.typesetPromise([container]).catch(() => {});
-      }
-    }
-
-    function renderQuestionBlock(q, num, canDelete, subId = "", folderId = "") {
-      const tag = q.subjectName ? `<span class="count-pill" style="margin-bottom:6px; display:inline-block;">${q.subjectName} • ${q.folderName}</span>` : "";
-      const delBtn = canDelete ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>` : "";
-
-      if (q.type === "mc") {
-        return `
-          <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div>${tag}<div style="font-weight:700; font-size:15px;">${num}. ${q.question}</div></div>
-              ${delBtn}
-            </div>
-            <div style="margin-top:8px;">
-              ${q.options.map(opt => `
-                <div class="mc-option" onclick="checkMcQuestion('${q.id}', '${opt.replace(/'/g, "\'")}', '${q.correct.replace(/'/g, "\'")}', '${q.explanation.replace(/'/g, "\'")}')">
-                  <span>🔘</span> <span>${opt}</span>
-                </div>
-              `).join("")}
-            </div>
-            <div id="fb-${q.id}"></div>
-          </div>
-        `;
-      } else {
-        return `
-          <div class="question-card">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div>${tag}<div style="font-weight:700; font-size:15px;">${num}. ${q.question}</div></div>
-              ${delBtn}
-            </div>
-            <div style="display:flex; gap:8px; margin-top:10px;">
-              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
-              <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', '${q.answer.replace(/'/g, "\'")}', '${q.explanation.replace(/'/g, "\'")}')">Prüfen</button>
-            </div>
-            <div id="fb-${q.id}"></div>
-          </div>
-        `;
-      }
-    }
-
-    function toggleNewQuestionFields() {
-      const val = document.getElementById("newQType").value;
-      document.getElementById("mcFieldsBox").style.display = val === "mc" ? "block" : "none";
-      document.getElementById("calcFieldsBox").style.display = val === "calc" ? "block" : "none";
-    }
-
-    /* ==========================================================
-       9. ADMIN FREIGABE-EDITOR
-       ========================================================== */
-    function openSubjectAccessEditor(subId) {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      editingSubjectId = subId;
-      const sub = subjects.find(s => s.id === subId);
-      const students = users.filter(u => u.role !== "Admin");
-      document.getElementById("accessEditorTitle").innerText = `Zugriff festlegen für: ${sub.name}`;
-      tempSelectedUsers = sub.accessAll ? new Set(students.map(u => u.id)) : new Set(sub.allowedUsers);
-      renderStudentCheckboxes();
-      document.getElementById("accessEditorBox").style.display = "block";
-    }
-
-    function renderStudentCheckboxes() {
-      const students = users.filter(u => u.role !== "Admin");
-      document.getElementById("studentCheckboxes").innerHTML = students.map(u => `
-        <label class="user-check-label">
-          <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleStudentSelection(${u.id}, this.checked)">
-          <span>${u.name}</span>
-        </label>
-      `).join("");
-    }
-
-    function toggleStudentSelection(userId, checked) {
-      if (checked) tempSelectedUsers.add(userId);
-      else tempSelectedUsers.delete(userId);
-    }
-
-    function selectAllStudents(all) {
-      const students = users.filter(u => u.role !== "Admin");
-      tempSelectedUsers = all ? new Set(students.map(u => u.id)) : new Set();
-      renderStudentCheckboxes();
-    }
-
-    function saveSubjectAccess() {
-      if (!isAdmin()) return alert("Nur Admins haben Zugriff auf diese Funktion.");
-      const sub = subjects.find(s => s.id === editingSubjectId);
-      const students = users.filter(u => u.role !== "Admin");
-      if (tempSelectedUsers.size === students.length) {
-        sub.accessAll = true;
-        sub.allowedUsers = [];
-      } else {
-        sub.accessAll = false;
-        sub.allowedUsers = Array.from(tempSelectedUsers);
-      }
-      saveSubjects();
-      renderSidebar();
-      renderView();
-    }
-
-
-    /* ==========================================================
-       10. KI-CODE-IMPORT FÜR FRAGEN & FORMELN
-       ========================================================== */
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
-    function saveCustomFormulas() {
-      localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
-    }
-
-    function copyAiPromptForFolder(subName, folderName) {
-      const promptText = `Erstelle für das Fach "${subName}" im Unterordner "${folderName}" 3 Lernfragen als reines JSON-Array ohne Markdown-Backticks. Format: [{"type":"mc","question":"...","options":["A","B","C","D"],"correct":"A","explanation":"..."},{"type":"calc","question":"...","answer":"42","explanation":"..."}]`;
-      navigator.clipboard?.writeText(promptText);
-      const fb = document.getElementById("aiImportMsg");
-      if (fb) {
-        fb.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt kopiert! Füge ihn bei deiner KI ein und kopiere die JSON-Antwort unten hinein.</div>`;
-      }
-    }
-
-    function importAiQuestionsToFolder(subId, folderId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Fragen einfügen.");
-      const raw = document.getElementById("aiCodePasteArea").value.trim();
-      const fb = document.getElementById("aiImportMsg");
-      if (!raw) {
-        fb.innerHTML = `<div class="result-banner result-err">Bitte zuerst den generierten Code einfügen!</div>`;
-        return;
-      }
-
-      // Markdown ```json ... ``` automatisch entfernen falls vorhanden
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-
-      try {
-        let parsed = JSON.parse(cleaned);
-        if (!Array.isArray(parsed)) parsed = [parsed];
-
-        const sub = subjects.find(s => s.id === subId);
-        const folder = sub.folders.find(f => f.id === folderId);
-        let addedCount = 0;
-
-        parsed.forEach((item, idx) => {
-          if (!item || !item.question) return;
-          if (item.type === "calc" || (!item.options && item.answer !== undefined)) {
-            folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
-              type: "calc",
-              question: String(item.question),
-              answer: String(item.answer ?? ""),
-              explanation: String(item.explanation || "Per KI-Code importiert.")
-            });
-            addedCount++;
-          } else {
-            const opts = Array.isArray(item.options) && item.options.length >= 2
-              ? item.options.map(String)
-              : ["Antwort A", "Antwort B", "Antwort C", "Antwort D"];
-            const corr = item.correct && opts.includes(String(item.correct))
-              ? String(item.correct)
-              : opts[0];
-            folder.questions.push({
-              id: "q-ai-" + Date.now() + "-" + idx,
-              type: "mc",
-              question: String(item.question),
-              options: opts,
-              correct: corr,
-              explanation: String(item.explanation || "Per KI-Code importiert.")
-            });
-            addedCount++;
-          }
-        });
-
-        if (addedCount === 0) {
-          fb.innerHTML = `<div class="result-banner result-err">Keine gültigen Fragen im Code erkannt.</div>`;
-          return;
-        }
-
-        saveSubjects();
-        renderSidebar();
-        renderView();
-      } catch (e) {
-        fb.innerHTML = `<div class="result-banner result-err">Code-Format ungültig (JSON prüfen): ${e.message}</div>`;
-      }
-    }
-
-    function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine Lernformel als reines JSON-Objekt ohne Markdown-Backticks. Format: {"title":"...","category":"...","formula":"...","description":"...","var1Label":"Wert 1","var1Default":10,"var2Label":"Wert 2","var2Default":2,"formulaType":"mul"} (formulaType: "mul", "div", "add")`;
-      navigator.clipboard?.writeText(promptText);
-      const fb = document.getElementById("aiFormulaMsg");
-      if (fb) {
-        fb.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt kopiert! Füge die KI-Antwort unten ein.</div>`;
-      }
-    }
-
-    function importAiFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln einfügen.");
-      const raw = document.getElementById("aiFormulaCodeArea").value.trim();
-      const fb = document.getElementById("aiFormulaMsg");
-      if (!raw) {
-        fb.innerHTML = `<div class="result-banner result-err">Bitte zuerst den erstellten Formel-Code einfügen!</div>`;
-        return;
-      }
-
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-
-      try {
-        let items = JSON.parse(cleaned);
-        if (!Array.isArray(items)) items = [items];
-
-        let count = 0;
-        items.forEach((f, idx) => {
-          if (!f || !f.title || !f.formula) return;
-          customFormulas.push({
-            id: "cf-" + Date.now() + "-" + idx,
-            title: String(f.title),
-            category: String(f.category || "KI-Formel"),
-            formula: String(f.formula),
-            description: String(f.description || ""),
-            var1Label: String(f.var1Label || "Eingabe A"),
-            var1Default: Number(f.var1Default ?? 10),
-            var2Label: String(f.var2Label || "Eingabe B"),
-            var2Default: Number(f.var2Default ?? 2),
-            formulaType: ["mul", "div", "add"].includes(f.formulaType) ? f.formulaType : "mul"
-          });
-          count++;
-        });
-
-        if (count === 0) {
-          fb.innerHTML = `<div class="result-banner result-err">Keine gültige Formel im Code gefunden.</div>`;
-          return;
-        }
-
-        saveCustomFormulas();
-        activeCalcTab = "ai-custom";
-        renderView();
-      } catch (e) {
-        fb.innerHTML = `<div class="result-banner result-err">Ungültiger Formel-Code: ${e.message}</div>`;
-      }
-    }
-
-    function deleteCustomFormula(cfId) {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
-      customFormulas = customFormulas.filter(x => x.id !== cfId);
-      saveCustomFormulas();
-      renderView();
-    }
-
-    function runCustomFormulaCalc(cfId) {
-      const cf = customFormulas.find(x => x.id === cfId);
-      if (!cf) return;
-      const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value);
-      const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value);
-      if (isNaN(v1) || isNaN(v2)) return;
-
-      let res = 0;
-      if (cf.formulaType === "mul") res = v1 * v2;
-      else if (cf.formulaType === "div") res = v2 !== 0 ? v1 / v2 : NaN;
-      else res = v1 + v2;
-
-      const out = document.getElementById("cfres-" + cfId);
-      if (isNaN(res)) {
-        out.innerHTML = `<div class="result-banner result-err">Division durch 0 nicht möglich.</div>`;
-      } else {
-        out.innerHTML = `<div class="result-banner result-ok">Ergebnis: ${Number.isInteger(res) ? res : res.toFixed(3)}</div>`;
-      }
-    }
-
-    // Initiales Rendering
-    updateTopStatusBar();
-  </script>
-</body>
-</html>
+              { id: "q5", type: "calc", question: "Berechne die Drehzahl n (in 1/min) bei vc = 157 m/min und d = 50 mm (π ≈ 3,14).", answer: "1000",
