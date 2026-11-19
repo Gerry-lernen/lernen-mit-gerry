@@ -1000,7 +1000,7 @@
         <div class="nav-section-label">Nachschlagen &amp; Rechner</div>
         <button class="nav-item" onclick="navigate('formulas', this)">
           <span class="nav-item-left">📐 Formelsammlung &amp; Rechner</span>
-          <span class="count-pill" id="sidebarFormulaCount">22</span>
+          <span class="count-pill" id="sidebarFormulaCount">3</span>
         </button>
         <button class="nav-item" onclick="navigate('matura-textsorten', this)">
           <span class="nav-item-left">📝 Matura-Textsorten (D/E)</span>
@@ -1075,6 +1075,27 @@
   </div>
 
   <script>
+    function escapeHtml(val) {
+      return String(val ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function escapeJsSingle(val) {
+      return String(val ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n");
+    }
+
+    function isSafeCssColor(hex) {
+      return /^#[0-9a-fA-F]{3,8}$/.test(String(hex || "").trim());
+    }
+
     const SUPABASE_URL = "https://qokjzpdxuhopepgsdyon.supabase.co";
     const SUPABASE_KEY = "sb_publishable_C_0daRBdXaHKe-KhAjuKfw_LqihH_nP";
     const ROOM_ID = "lernen-mit-gerry-main";
@@ -1222,9 +1243,7 @@
         minute: "2-digit"
       });
 
-      const fullBody = email
-        ? `Kontakt / E-Mail: ${email}\n\n${body}`
-        : body;
+      const fullBody = email ? `Kontakt / E-Mail: ${email}\n\n${body}` : body;
 
       contactMessages.unshift({
         id: "msg-guest-" + Date.now(),
@@ -1256,10 +1275,10 @@
       const banner = document.getElementById("sessionLogoutBanner");
       if (!banner) return;
       if (msg) {
-        banner.innerText = msg;
+        banner.textContent = msg;
         banner.style.display = "block";
       } else {
-        banner.innerText = "";
+        banner.textContent = "";
         banner.style.display = "none";
       }
     }
@@ -1487,20 +1506,13 @@
 
     function adminSaveImprintFromForm() {
       if (!isAdmin()) return alert("Nur Admins dürfen das Impressum bearbeiten.");
-      const opEl = document.getElementById("adminImpOperator");
-      const addrEl = document.getElementById("adminImpAddress");
-      const mailEl = document.getElementById("adminImpEmail");
-      const roleEl = document.getElementById("adminImpRole");
-      const discEl = document.getElementById("adminImpDisclaimer");
-      const privEl = document.getElementById("adminImpPrivacy");
-
       imprintData = {
-        operatorName: (opEl ? opEl.value : imprintData.operatorName).trim() || defaultImprintData.operatorName,
-        address: (addrEl ? addrEl.value : imprintData.address).trim(),
-        email: (mailEl ? mailEl.value : imprintData.email).trim(),
-        websiteRole: (roleEl ? roleEl.value : imprintData.websiteRole).trim(),
-        disclaimer: (discEl ? discEl.value : imprintData.disclaimer).trim(),
-        privacyNote: (privEl ? privEl.value : imprintData.privacyNote).trim()
+        operatorName: (document.getElementById("adminImpOperator")?.value || defaultImprintData.operatorName).trim(),
+        address: (document.getElementById("adminImpAddress")?.value || "").trim(),
+        email: (document.getElementById("adminImpEmail")?.value || "").trim(),
+        websiteRole: (document.getElementById("adminImpRole")?.value || "").trim(),
+        disclaimer: (document.getElementById("adminImpDisclaimer")?.value || "").trim(),
+        privacyNote: (document.getElementById("adminImpPrivacy")?.value || "").trim()
       };
       saveImprintData();
 
@@ -1560,7 +1572,7 @@
 
       const afterFb = document.getElementById("contactFormMsg");
       if (afterFb) {
-        afterFb.innerHTML = `<div class="result-banner result-ok">✅ Deine Nachricht („${title}“) wurde an den Administrator gesendet!</div>`;
+        afterFb.innerHTML = `<div class="result-banner result-ok">✅ Deine Nachricht („${escapeHtml(title)}“) wurde an den Administrator gesendet!</div>`;
       }
     }
 
@@ -1590,39 +1602,37 @@
               <h3 style="font-size:19px;">📄 Impressum</h3>
               <p style="font-size:13px; color:var(--text-muted);">Anbieterkennzeichnung &amp; rechtliche Hinweise zum Lernportal.</p>
             </div>
-            ${isAdmin() ? `
-              <button type="button" class="btn-secondary" onclick="navigate('admin')">✏️ Im Admin-Bereich bearbeiten</button>
-            ` : ""}
+            ${isAdmin() ? `<button type="button" class="btn-secondary" onclick="navigate('admin')">✏️ Im Admin-Bereich bearbeiten</button>` : ""}
           </div>
 
           <div class="setting-row">
             <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Betreiber / Projekt</div>
-            <div style="flex:1; font-weight:700; font-size:15px;">${imprintData.operatorName || "–"}</div>
+            <div style="flex:1; font-weight:700; font-size:15px;">${escapeHtml(imprintData.operatorName || "–")}</div>
           </div>
 
           <div class="setting-row">
             <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Standort / Anschrift</div>
-            <div style="flex:1; font-size:14px; white-space:pre-line;">${imprintData.address || "–"}</div>
+            <div style="flex:1; font-size:14px; white-space:pre-line;">${escapeHtml(imprintData.address || "–")}</div>
           </div>
 
           <div class="setting-row">
             <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Kontakt-E-Mail</div>
-            <div style="flex:1; font-size:14px;">${imprintData.email ? `<code>${imprintData.email}</code>` : "–"}</div>
+            <div style="flex:1; font-size:14px;">${imprintData.email ? `<code>${escapeHtml(imprintData.email)}</code>` : "–"}</div>
           </div>
 
           <div class="setting-row">
             <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Zweck des Angebots</div>
-            <div style="flex:1; font-size:14px; line-height:1.5; white-space:pre-line;">${imprintData.websiteRole || "–"}</div>
+            <div style="flex:1; font-size:14px; line-height:1.5; white-space:pre-line;">${escapeHtml(imprintData.websiteRole || "–")}</div>
           </div>
 
           <div class="setting-row">
             <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Haftungsausschluss</div>
-            <div style="flex:1; font-size:13.5px; color:var(--text-muted); line-height:1.5; white-space:pre-line;">${imprintData.disclaimer || "–"}</div>
+            <div style="flex:1; font-size:13.5px; color:var(--text-muted); line-height:1.5; white-space:pre-line;">${escapeHtml(imprintData.disclaimer || "–")}</div>
           </div>
 
           <div class="setting-row">
             <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Datenschutzhinweis</div>
-            <div style="flex:1; font-size:13.5px; color:var(--text-muted); line-height:1.5; white-space:pre-line;">${imprintData.privacyNote || "–"}</div>
+            <div style="flex:1; font-size:13.5px; color:var(--text-muted); line-height:1.5; white-space:pre-line;">${escapeHtml(imprintData.privacyNote || "–")}</div>
           </div>
         </div>
       `;
@@ -1653,7 +1663,7 @@
               <label style="font-size:13px; font-weight:600;">Betroffenes Fach (optional)</label>
               <select id="contactSubjectInput" class="select-field">
                 <option value="Allgemein">📚 Allgemein / Portal</option>
-                ${subjects.map(s => `<option value="${s.name}">${s.icon} ${s.name}</option>`).join("")}
+                ${subjects.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.icon)} ${escapeHtml(s.name)}</option>`).join("")}
               </select>
             </div>
           </div>
@@ -1686,22 +1696,22 @@
                 <div class="contact-msg-card ${!m.read ? 'unread' : ''}">
                   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
                     <div>
-                      <span class="count-pill">${m.category}</span>
-                      <span class="count-pill" style="margin-left:4px;">${m.subjectName}</span>
+                      <span class="count-pill">${escapeHtml(m.category)}</span>
+                      <span class="count-pill" style="margin-left:4px;">${escapeHtml(m.subjectName)}</span>
                       ${!m.read ? `<span class="days-badge" style="margin-left:6px; padding:2px 8px; font-size:11px;">Neu</span>` : `<span class="count-pill" style="margin-left:6px;">Gelesen</span>`}
-                      <div style="font-weight:800; font-size:15px; margin-top:6px;">${m.title}</div>
+                      <div style="font-weight:800; font-size:15px; margin-top:6px;">${escapeHtml(m.title)}</div>
                       <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-                        Von <strong>${m.senderName}</strong> <span class="role-badge">${m.senderRole}</span> · ${m.timestamp}
+                        Von <strong>${escapeHtml(m.senderName)}</strong> <span class="role-badge">${escapeHtml(m.senderRole)}</span> · ${escapeHtml(m.timestamp)}
                       </div>
                     </div>
                     <div style="display:flex; gap:8px;">
-                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="markContactMessageRead('${m.id}')">
+                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="markContactMessageRead('${escapeJsSingle(m.id)}')">
                         ${m.read ? "Als neu markieren" : "Als gelesen markieren"}
                       </button>
-                      <button type="button" class="btn-danger" onclick="deleteContactMessage('${m.id}')">Löschen</button>
+                      <button type="button" class="btn-danger" onclick="deleteContactMessage('${escapeJsSingle(m.id)}')">Löschen</button>
                     </div>
                   </div>
-                  <div style="font-size:14px; line-height:1.5; white-space:pre-line; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 12px;">${m.body}</div>
+                  <div style="font-size:14px; line-height:1.5; white-space:pre-line; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 12px;">${escapeHtml(m.body)}</div>
                 </div>
               `).join("")
             }
@@ -1714,11 +1724,11 @@
               : ownMessages.map(m => `
                 <div class="contact-msg-card">
                   <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:12px; color:var(--text-muted);">
-                    <span><strong>${m.category}</strong> · ${m.subjectName}</span>
-                    <span>${m.timestamp}</span>
+                    <span><strong>${escapeHtml(m.category)}</strong> · ${escapeHtml(m.subjectName)}</span>
+                    <span>${escapeHtml(m.timestamp)}</span>
                   </div>
-                  <div style="font-weight:700; font-size:14.5px; margin-top:4px;">${m.title}</div>
-                  <div style="font-size:13.5px; margin-top:4px; white-space:pre-line;">${m.body}</div>
+                  <div style="font-weight:700; font-size:14.5px; margin-top:4px;">${escapeHtml(m.title)}</div>
+                  <div style="font-size:13.5px; margin-top:4px; white-space:pre-line;">${escapeHtml(m.body)}</div>
                 </div>
               `).join("")
             }
@@ -2161,8 +2171,6 @@
       if (!cleanName) {
         if (fbEl) {
           fbEl.innerHTML = `<div class="result-banner result-err">❌ Bitte gib zuerst einen Namen für das Unterrichtsfach ein.</div>`;
-        } else {
-          alert("Bitte gib zuerst einen Namen für das Unterrichtsfach ein.");
         }
         nameEl?.focus();
         return;
@@ -2171,14 +2179,15 @@
       const duplicate = subjects.find(s => String(s.name).trim().toLowerCase() === cleanName.toLowerCase());
       if (duplicate) {
         if (fbEl) {
-          fbEl.innerHTML = `<div class="result-banner result-err">❌ Ein Fach mit dem Namen „${cleanName}“ existiert bereits.</div>`;
+          fbEl.innerHTML = `<div class="result-banner result-err">❌ Ein Fach mit dem Namen „${escapeHtml(cleanName)}“ existiert bereits.</div>`;
         }
         return;
       }
 
       const cleanIcon = (iconEl && iconEl.value.trim()) ? iconEl.value.trim() : "📘";
       const cleanCat = (catEl && catEl.value.trim()) ? catEl.value.trim() : "TECHNIK";
-      const cleanColor = (colorEl && colorEl.value) ? colorEl.value : "#2563eb";
+      const rawColor = (colorEl && colorEl.value) ? colorEl.value : "#2563eb";
+      const cleanColor = isSafeCssColor(rawColor) ? rawColor : "#2563eb";
       const accessAll = accessAllEl ? Boolean(accessAllEl.checked) : true;
       const firstFolderName = (folderEl && folderEl.value.trim()) ? folderEl.value.trim() : "Grundlagen";
 
@@ -2218,7 +2227,7 @@
 
       const afterFb = document.getElementById("newSubjectFeedback");
       if (afterFb) {
-        afterFb.innerHTML = `<div class="result-banner result-ok">✅ Unterrichtsfach „${cleanName}“ wurde angelegt (inkl. Ordner „${firstFolderName}“).</div>`;
+        afterFb.innerHTML = `<div class="result-banner result-ok">✅ Unterrichtsfach „${escapeHtml(cleanName)}“ wurde angelegt (inkl. Ordner „${escapeHtml(firstFolderName)}“).</div>`;
       }
     }
 
@@ -2373,12 +2382,8 @@
         }
       });
 
-      if (examQuestionMode === "mc") {
-        return pool.filter(q => q.type === "mc");
-      }
-      if (examQuestionMode === "calc") {
-        return pool.filter(q => q.type !== "mc");
-      }
+      if (examQuestionMode === "mc") return pool.filter(q => q.type === "mc");
+      if (examQuestionMode === "calc") return pool.filter(q => q.type !== "mc");
       return pool;
     }
 
@@ -2455,9 +2460,9 @@
             awarded ? "+10 Pkt" : "",
             streakIncreased ? `Streak erhöht (${currentUser.streak} Tage 🔥)` : ""
           ].filter(Boolean).join(" · ");
-          fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! ${extraInfo ? `(${extraInfo}) ` : ""}– ${explanation}</div>`;
+          fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! ${extraInfo ? `(${escapeHtml(extraInfo)}) ` : ""}– ${escapeHtml(explanation)}</div>`;
         } else {
-          fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expectedAnswer}) – ${explanation}</div>`;
+          fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${escapeHtml(expectedAnswer)}) – ${escapeHtml(explanation)}</div>`;
         }
         typesetMath(fb);
       }
@@ -2520,35 +2525,41 @@
               const prev = activeExamSession.answered[q.id];
               const existingFb = prev
                 ? (prev.correct
-                    ? `<div class="result-banner result-ok">✅ Richtig beantwortet – ${q.explanation}</div>`
-                    : `<div class="result-banner result-err">❌ Falsch (Deine Antwort: „${prev.userAnswer}“ · Richtig: ${q.correct || q.answer}) – ${q.explanation}</div>`)
+                    ? `<div class="result-banner result-ok">✅ Richtig beantwortet – ${escapeHtml(q.explanation)}</div>`
+                    : `<div class="result-banner result-err">❌ Falsch (Deine Antwort: „${escapeHtml(prev.userAnswer)}“ · Richtig: ${escapeHtml(q.correct || q.answer)}) – ${escapeHtml(q.explanation)}</div>`)
                 : "";
 
+              const safeQId = escapeJsSingle(q.id);
+              const safeExpl = escapeJsSingle(q.explanation);
+
               if (q.type === "mc") {
+                const safeCorr = escapeJsSingle(q.correct);
                 return `
                   <div class="question-card">
-                    <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${q.subjectName} • ${q.folderName}${q.isAutoGenerated ? " • Auto-Frage" : ""}</span>
-                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${q.question}</div>
+                    <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${escapeHtml(q.subjectName)} • ${escapeHtml(q.folderName)}${q.isAutoGenerated ? " • Auto-Frage" : ""}</span>
+                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
                     <div style="margin-top:8px;">
                       ${q.options.map(opt => `
-                        <div class="mc-option" onclick="submitExamQuestionAnswer('${q.id}', '${opt.replace(/'/g, "\\'")}', '${q.correct.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}', true)">
-                          <span>🔘</span> <span>${opt}</span>
+                        <div class="mc-option" onclick="submitExamQuestionAnswer('${safeQId}', '${escapeJsSingle(opt)}', '${safeCorr}', '${safeExpl}', true)">
+                          <span>🔘</span> <span>${escapeHtml(opt)}</span>
                         </div>
                       `).join("")}
                     </div>
-                    <div id="exam-fb-${q.id}">${existingFb}</div>
+                    <div id="exam-fb-${escapeHtml(q.id)}">${existingFb}</div>
                   </div>
                 `;
               } else {
+                const safeAns = escapeJsSingle(q.answer);
+                const inputId = `exam-ans-${escapeHtml(q.id)}`;
                 return `
                   <div class="question-card">
-                    <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${q.subjectName} • ${q.folderName}${q.isAutoGenerated ? " • Auto-Frage" : ""}</span>
-                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${q.question}</div>
+                    <span class="count-pill" style="margin-bottom:6px; display:inline-block;">${escapeHtml(q.subjectName)} • ${escapeHtml(q.folderName)}${q.isAutoGenerated ? " • Auto-Frage" : ""}</span>
+                    <div style="font-weight:700; font-size:15px;">${idx + 1}. ${escapeHtml(q.question)}</div>
                     <div style="display:flex; gap:8px; margin-top:10px;">
-                      <input type="text" id="exam-ans-${q.id}" class="input-field" style="margin:0;" value="${prev ? prev.userAnswer.replace(/"/g, '&quot;') : ''}" placeholder="Antwort eingeben...">
-                      <button class="btn-primary" onclick="submitExamQuestionAnswer('${q.id}', document.getElementById('exam-ans-${q.id}').value, '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}', false)">Prüfen</button>
+                      <input type="text" id="${inputId}" class="input-field" style="margin:0;" value="${prev ? escapeHtml(prev.userAnswer) : ''}" placeholder="Antwort eingeben...">
+                      <button class="btn-primary" onclick="submitExamQuestionAnswer('${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeAns}', '${safeExpl}', false)">Prüfen</button>
                     </div>
-                    <div id="exam-fb-${q.id}">${existingFb}</div>
+                    <div id="exam-fb-${escapeHtml(q.id)}">${existingFb}</div>
                   </div>
                 `;
               }
@@ -2599,7 +2610,7 @@
                 return `
                   <div class="exam-chapter-mini-card">
                     <div style="display:flex; justify-content:space-between; gap:6px; font-size:12.5px;">
-                      <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.sub.icon} ${item.folder.name}</span>
+                      <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.sub.icon)} ${escapeHtml(item.folder.name)}</span>
                       <span style="font-weight:700; color:#10b981; white-space:nowrap;">${item.masteredQ}/${item.totalQ}</span>
                     </div>
                     <div class="exam-mini-bar"><div style="width:${p}%;"></div></div>
@@ -2637,9 +2648,9 @@
               <div class="exam-option-desc">Fragen aus allen freigeschalteten Unterordnern (${totalAllQ} Fragen).</div>
             </button>
             ${allFolderItems.map(item => `
-              <button type="button" class="exam-option-card ${examScopeKey === item.key ? 'active' : ''}" onclick="examScopeKey='${item.key}'; renderView();">
-                <div class="exam-option-title">📁 ${item.folder.name}</div>
-                <div class="exam-option-desc">${item.sub.icon} ${item.sub.name} · ${item.totalQ} Fragen</div>
+              <button type="button" class="exam-option-card ${examScopeKey === item.key ? 'active' : ''}" onclick="examScopeKey='${escapeJsSingle(item.key)}'; renderView();">
+                <div class="exam-option-title">📁 ${escapeHtml(item.folder.name)}</div>
+                <div class="exam-option-desc">${escapeHtml(item.sub.icon)} ${escapeHtml(item.sub.name)} · ${item.totalQ} Fragen</div>
               </button>
             `).join("")}
           </div>
@@ -2724,7 +2735,7 @@
       );
 
       if (!found) {
-        errBox.innerText = "E-Mail/Name oder Passwort stimmt nicht.";
+        errBox.textContent = "E-Mail/Name oder Passwort stimmt nicht.";
         errBox.style.display = "block";
         return;
       }
@@ -2744,7 +2755,7 @@
       );
 
       if (!found) {
-        errBox.innerText = "Name oder Initialpasswort nicht gefunden. Bitte prüfe deine Schreibweise.";
+        errBox.textContent = "Name oder Initialpasswort nicht gefunden. Bitte prüfe deine Schreibweise.";
         errBox.style.display = "block";
         return;
       }
@@ -2765,7 +2776,7 @@
       applyScreenVisibility();
 
       if (currentUser.mustChangePassword) {
-        document.getElementById("pwdModalUserName").innerText = currentUser.name;
+        document.getElementById("pwdModalUserName").textContent = currentUser.name;
         document.getElementById("newPersonalPwd1").value = "";
         document.getElementById("newPersonalPwd2").value = "";
         document.getElementById("pwdModalError").style.display = "none";
@@ -2779,12 +2790,12 @@
       const err = document.getElementById("pwdModalError");
 
       if (p1.length < 4) {
-        err.innerText = "Bitte gib ein Passwort mit mindestens 4 Zeichen ein.";
+        err.textContent = "Bitte gib ein Passwort mit mindestens 4 Zeichen ein.";
         err.style.display = "block";
         return;
       }
       if (p1 !== p2) {
-        err.innerText = "Die beiden Passwörter stimmen nicht überein.";
+        err.textContent = "Die beiden Passwörter stimmen nicht überein.";
         err.style.display = "block";
         return;
       }
@@ -2828,7 +2839,7 @@
       }
       if (dot) dot.className = "dot-green";
       if (txt) {
-        txt.innerHTML = `Aktiv als <strong>${currentUser.name} (${currentUser.role})</strong> · Streak: <strong>${currentUser.streak || 0}d 🔥</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
+        txt.innerHTML = `Aktiv als <strong>${escapeHtml(currentUser.name)} (${escapeHtml(currentUser.role)})</strong> · Streak: <strong>${currentUser.streak || 0}d 🔥</strong> · Live-Sync aktiv · Auto-Logout: 15 Min.`;
       }
     }
 
@@ -2987,12 +2998,14 @@
     }
 
     function setTheme(theme) {
-      document.documentElement.setAttribute("data-theme", theme);
-      localStorage.setItem("lmg_theme", theme);
+      const safeTheme = theme === "dark" ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", safeTheme);
+      localStorage.setItem("lmg_theme", safeTheme);
       if (isAuthenticated && currentView === "settings" && !isLoginScreenVisible) renderView();
     }
 
     function setAccentColor(hex) {
+      if (!isSafeCssColor(hex)) return;
       document.documentElement.style.setProperty("--accent", hex);
       document.documentElement.style.setProperty("--accent-hover", hex);
       document.documentElement.style.setProperty("--accent-soft", hex + "1F");
@@ -3021,31 +3034,31 @@
     function renderSidebar() {
       if (!isAuthenticated || !currentUser) return;
       normalizeUserStreak(currentUser);
-      document.getElementById("sidebarUserName").innerText = currentUser.name;
-      document.getElementById("avatarInitials").innerText = currentUser.initials;
-      document.getElementById("sidebarRoleBadge").innerText = currentUser.role;
+      document.getElementById("sidebarUserName").textContent = currentUser.name;
+      document.getElementById("avatarInitials").textContent = currentUser.initials;
+      document.getElementById("sidebarRoleBadge").textContent = currentUser.role;
       const streakEl = document.getElementById("sidebarStreakText");
       if (streakEl) {
         const sVal = currentUser.streak || 0;
-        streakEl.innerText = `${sVal} ${sVal === 1 ? "Tag" : "Tage"} Streak 🔥`;
+        streakEl.textContent = `${sVal} ${sVal === 1 ? "Tag" : "Tage"} Streak 🔥`;
       }
-      document.getElementById("userPointsDisplay").innerText = currentUser.points + " Pkt 🏆";
-      document.getElementById("headerPointsBadge").innerText = currentUser.points + " Pkt";
+      document.getElementById("userPointsDisplay").textContent = currentUser.points + " Pkt 🏆";
+      document.getElementById("headerPointsBadge").textContent = currentUser.points + " Pkt";
 
       const upcomingExamsCount = exams.filter(e => getDaysUntil(e.date) >= 0).length;
-      document.getElementById("headerCalendarCount").innerText = upcomingExamsCount;
-      document.getElementById("sidebarExamCount").innerText = upcomingExamsCount;
+      document.getElementById("headerCalendarCount").textContent = upcomingExamsCount;
+      document.getElementById("sidebarExamCount").textContent = upcomingExamsCount;
 
       const formulaBadge = document.getElementById("sidebarFormulaCount");
       if (formulaBadge) {
-        formulaBadge.innerText = 3 + customFormulas.length;
+        formulaBadge.textContent = String(3 + customFormulas.length);
       }
 
       const pendingCount = getIncomingRequests(currentUser.id).length;
       const friendBadge = document.getElementById("sidebarPendingFriendCount");
       if (friendBadge) {
         friendBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
-        friendBadge.innerText = pendingCount;
+        friendBadge.textContent = String(pendingCount);
       }
 
       const unreadContactCount = contactMessages.filter(m => !m.read).length;
@@ -3053,7 +3066,7 @@
       if (contactBadge) {
         if (isAdmin() && unreadContactCount > 0) {
           contactBadge.style.display = "inline-block";
-          contactBadge.innerText = unreadContactCount;
+          contactBadge.textContent = String(unreadContactCount);
         } else {
           contactBadge.style.display = "none";
         }
@@ -3072,22 +3085,26 @@
         </button>
       ` : "";
 
-      document.getElementById("sidebarSubjects").innerHTML = addSubjectBtnHtml + visible.map(sub => `
-        <div class="nav-item ${currentView === 'subject-' + sub.id ? 'active' : ''}"
-             style="padding-right:8px;"
-             onclick="navigate('subject-${sub.id}', this)">
-          <span class="nav-item-left">
-            <span class="subject-dot" style="background:${sub.color};"></span>
-            <span>${sub.icon} ${sub.name}</span>
-          </span>
-          <span style="display:flex; align-items:center; gap:6px;">
-            <span onclick="toggleFavoriteSubject('${sub.id}', event)"
-                  title="${sub.favorite ? 'Aus Favoriten entfernen' : 'Als Favorit markieren'}"
-                  style="cursor:pointer; font-size:14px; line-height:1; opacity:${sub.favorite ? '1' : '0.35'};">⭐</span>
-            <span class="count-pill">${sub.folders.length}</span>
-          </span>
-        </div>
-      `).join("");
+      document.getElementById("sidebarSubjects").innerHTML = addSubjectBtnHtml + visible.map(sub => {
+        const safeSubId = escapeJsSingle(sub.id);
+        const dotColor = isSafeCssColor(sub.color) ? sub.color : "#2563eb";
+        return `
+          <div class="nav-item ${currentView === 'subject-' + sub.id ? 'active' : ''}"
+               style="padding-right:8px;"
+               onclick="navigate('subject-${safeSubId}', this)">
+            <span class="nav-item-left">
+              <span class="subject-dot" style="background:${dotColor};"></span>
+              <span>${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</span>
+            </span>
+            <span style="display:flex; align-items:center; gap:6px;">
+              <span onclick="toggleFavoriteSubject('${safeSubId}', event)"
+                    title="${sub.favorite ? 'Aus Favoriten entfernen' : 'Als Favorit markieren'}"
+                    style="cursor:pointer; font-size:14px; line-height:1; opacity:${sub.favorite ? '1' : '0.35'};">⭐</span>
+              <span class="count-pill">${sub.folders.length}</span>
+            </span>
+          </div>
+        `;
+      }).join("");
     }
 
     function toggleSidebar(open) {
@@ -3226,7 +3243,7 @@
                 </div>
                 <div class="ts-panel">
                   <h5>5 Matura-Übungsbeispiele</h5>
-                  <ol>${item.exercises.map(ex => `<li>${ex}</li>`).join("")}</ol>
+                  <ol>${item.exercises.map(ex => `<li>${escapeHtml(ex)}</li>`).join("")}</ol>
                 </div>
               </div>
             </details>
@@ -3273,7 +3290,7 @@
         box.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
             <span style="font-size:13px; color:var(--text-muted);">Bilde die 1. Ableitung $f'(x)$ für:</span>
-            ${selectedLevel === "all" ? `<span class="count-pill">🎲 Mix: ${badgeText}</span>` : ""}
+            ${selectedLevel === "all" ? `<span class="count-pill">🎲 Mix: ${escapeHtml(badgeText)}</span>` : ""}
           </div>
           <div class="formula-box">$$${fnLatex}$$</div>
           <label style="font-size:13px; font-weight:600;">Deine Lösung für $f'(x)$ (z. B. 12x^2 + 4):</label>
@@ -3302,7 +3319,7 @@
       if (userVal === correctVal) {
         const res = recordLearningActivity(15);
         const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
-        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben${streakMsg}. (${currentDerivativeTask.hintLatex})</div>`;
+        fb.innerHTML = `<div class="result-banner result-ok">🎉 Richtig! +15 Punkte gutgeschrieben${escapeHtml(streakMsg)}. (${currentDerivativeTask.hintLatex})</div>`;
       } else {
         fb.innerHTML = `<div class="result-banner result-err">❌ Noch nicht ganz. Tipp: ${currentDerivativeTask.hintLatex}</div>`;
       }
@@ -3319,15 +3336,17 @@
     let activeFormulaCategoryFilter = "ALL";
 
     function renderFormulaCardItem(cf) {
+      const safeId = escapeJsSingle(cf.id);
+      const domId = escapeHtml(cf.id);
       return `
         <div class="question-card">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="count-pill">${cf.category}</span>
-            ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${cf.id}')">Löschen</button>` : ""}
+            <span class="count-pill">${escapeHtml(cf.category)}</span>
+            ${isAdmin() ? `<button class="btn-danger" onclick="deleteCustomFormula('${safeId}')">Löschen</button>` : ""}
           </div>
-          <h3 style="margin-top:8px;">${cf.title}</h3>
+          <h3 style="margin-top:8px;">${escapeHtml(cf.title)}</h3>
           <div class="formula-box">$$${cf.formula}$$</div>
-          ${cf.description ? `<h4 style="margin-bottom:4px;">Erklärung</h4><p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">${cf.description}</p>` : ""}
+          ${cf.description ? `<h4 style="margin-bottom:4px;">Erklärung</h4><p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">${escapeHtml(cf.description)}</p>` : ""}
           ${Array.isArray(cf.variables) && cf.variables.length > 0 ? `
             <h4 style="margin-bottom:6px;">Bedeutung der Variablen</h4>
             <table class="var-table" style="margin-bottom:16px;">
@@ -3336,18 +3355,18 @@
                 ${cf.variables.map(v => `
                   <tr>
                     <td class="var-sym">$${v.symbol}$</td>
-                    <td>${v.meaning}</td>
+                    <td>${escapeHtml(v.meaning)}</td>
                   </tr>
                 `).join("")}
               </tbody>
             </table>
           ` : ""}
           <div class="form-grid-2">
-            <div><label style="font-size:12px; font-weight:600;">${cf.var1Label}</label><input type="number" id="cfv1-${cf.id}" class="input-field" value="${cf.var1Default}"></div>
-            <div><label style="font-size:12px; font-weight:600;">${cf.var2Label}</label><input type="number" id="cfv2-${cf.id}" class="input-field" value="${cf.var2Default}"></div>
+            <div><label style="font-size:12px; font-weight:600;">${escapeHtml(cf.var1Label)}</label><input type="number" id="cfv1-${domId}" class="input-field" value="${Number(cf.var1Default) || 0}"></div>
+            <div><label style="font-size:12px; font-weight:600;">${escapeHtml(cf.var2Label)}</label><input type="number" id="cfv2-${domId}" class="input-field" value="${Number(cf.var2Default) || 0}"></div>
           </div>
-          <button class="btn-primary" onclick="runCustomFormulaCalc('${cf.id}')">Berechnen</button>
-          <div id="cfres-${cf.id}"></div>
+          <button class="btn-primary" onclick="runCustomFormulaCalc('${safeId}')">Berechnen</button>
+          <div id="cfres-${domId}"></div>
         </div>
       `;
     }
@@ -3363,8 +3382,8 @@
           ${categories.map(cat => `
             <button type="button"
                     class="filter-btn ${activeFormulaCategoryFilter === cat ? 'active' : ''}"
-                    onclick="activeFormulaCategoryFilter='${cat.replace(/'/g, "\\'")}'; renderView();">
-              ${cat === "ALL" ? `Alle (${customFormulas.length})` : `${cat} (${customFormulas.filter(x => (x.category || "Allgemein") === cat).length})`}
+                    onclick="activeFormulaCategoryFilter='${escapeJsSingle(cat)}'; renderView();">
+              ${cat === "ALL" ? `Alle (${customFormulas.length})` : `${escapeHtml(cat)} (${customFormulas.filter(x => (x.category || "Allgemein") === cat).length})`}
             </button>
           `).join("")}
         </div>
@@ -3383,14 +3402,14 @@
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
           <div>
             <span class="count-pill">📁 Formel-Ordner</span>
-            <h3 style="margin-top:6px;">${folder.name}</h3>
+            <h3 style="margin-top:6px;">${escapeHtml(folder.name)}</h3>
           </div>
           ${isAdmin() ? `
-            <button type="button" class="btn-danger" onclick="deleteFormulaFolder('${folder.id}')">🗑️ Ordner löschen</button>
+            <button type="button" class="btn-danger" onclick="deleteFormulaFolder('${escapeJsSingle(folder.id)}')">🗑️ Ordner löschen</button>
           ` : ""}
         </div>
         ${matching.length === 0
-          ? `<p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">Noch keine Formeln im Ordner „${folder.name}“. Füge unten eine Formel mit <code>"category": "${folder.name}"</code> ein oder nutze den Standardrechner.</p>`
+          ? `<p style="font-size:13.5px; color:var(--text-muted); margin-bottom:14px;">Noch keine Formeln im Ordner „${escapeHtml(folder.name)}“. Füge unten eine Formel mit <code>"category": "${escapeHtml(folder.name)}"</code> ein oder nutze den Standardrechner.</p>`
           : matching.map(cf => renderFormulaCardItem(cf)).join("")
         }
       `;
@@ -3613,9 +3632,9 @@
         saveMasteredQuestions();
         const res = recordLearningActivity(10);
         const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${streakMsg}) – ${explanation}</div>`;
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${escapeHtml(streakMsg)}) – ${escapeHtml(explanation)}</div>`;
       } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig wäre: ${expected}) – ${explanation}</div>`;
+        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig wäre: ${escapeHtml(expected)}) – ${escapeHtml(explanation)}</div>`;
       }
       typesetMath(fb);
     }
@@ -3627,9 +3646,9 @@
         saveMasteredQuestions();
         const res = recordLearningActivity(10);
         const streakMsg = res.streakIncreased ? ` · Streak erhöht (${currentUser.streak} Tage 🔥)` : "";
-        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${streakMsg}) – ${explanation}</div>`;
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Richtig! (+10 Pkt${escapeHtml(streakMsg)}) – ${escapeHtml(explanation)}</div>`;
       } else {
-        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${expected}) – ${explanation}</div>`;
+        fb.innerHTML = `<div class="result-banner result-err">❌ Falsch (Richtig: ${escapeHtml(expected)}) – ${escapeHtml(explanation)}</div>`;
       }
       typesetMath(fb);
     }
@@ -3675,10 +3694,10 @@
                 <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
                   <div style="display:flex; align-items:center; gap:12px; flex:1;">
                     <div class="rank-badge ${rankClass}">${medal}</div>
-                    <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${u.initials}</div>
+                    <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${escapeHtml(u.initials)}</div>
                     <div style="flex:1;">
                       <div style="font-weight:700; font-size:15px;">
-                        ${u.name}
+                        ${escapeHtml(u.name)}
                         ${isMe ? '<span class="count-pill" style="margin-left:4px;">Du</span>' : ''}
                         <span class="count-pill" style="margin-left:6px; font-size:11px;">
                           ${activeToday ? "✓ Heute gelernt" : "Noch nicht heute gelernt"}
@@ -3731,10 +3750,10 @@
               <div class="leaderboard-row ${isMe ? 'is-me' : ''}">
                 <div style="display:flex; align-items:center; gap:12px; flex:1;">
                   <div class="rank-badge ${rankClass}">${medal}</div>
-                  <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${u.initials}</div>
+                  <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${escapeHtml(u.initials)}</div>
                   <div style="flex:1;">
                     <div style="font-weight:700; font-size:15px;">
-                      ${u.name}
+                      ${escapeHtml(u.name)}
                       ${isMe ? '<span class="count-pill" style="margin-left:4px;">Du</span>' : ''}
                       <span class="count-pill" style="margin-left:6px; font-size:11px;">${u.streak || 0}d 🔥</span>
                     </div>
@@ -3779,10 +3798,10 @@
               : upcoming7Days.map(ex => `
                 <div class="exam-item-box">
                   <div>
-                    <div style="font-size:12px; color:#b45309; font-weight:700;">${ex.subject} • ${ex.date}</div>
-                    <div style="font-weight:800; font-size:15px; margin-top:2px;">${ex.title}</div>
+                    <div style="font-size:12px; color:#b45309; font-weight:700;">${escapeHtml(ex.subject)} • ${escapeHtml(ex.date)}</div>
+                    <div style="font-weight:800; font-size:15px; margin-top:2px;">${escapeHtml(ex.title)}</div>
                   </div>
-                  <span class="days-badge">${formatDaysBadge(ex.diff)}</span>
+                  <span class="days-badge">${escapeHtml(formatDaysBadge(ex.diff))}</span>
                 </div>
               `).join("")
             }
@@ -3820,21 +3839,23 @@
           <div class="fav-grid">
             ${favs.map(sub => {
               const totalQ = sub.folders.reduce((acc, f) => acc + f.questions.length, 0);
+              const safeSubId = escapeJsSingle(sub.id);
+              const topColor = isSafeCssColor(sub.color) ? sub.color : "#2563eb";
               return `
-                <div class="fav-card" style="border-top-color:${sub.color};">
+                <div class="fav-card" style="border-top-color:${topColor};">
                   <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="display:flex; gap:12px; align-items:center;">
-                      <div style="width:42px; height:42px; border-radius:10px; background:var(--bg-input); display:flex; align-items:center; justify-content:center; font-size:20px;">${sub.icon}</div>
+                      <div style="width:42px; height:42px; border-radius:10px; background:var(--bg-input); display:flex; align-items:center; justify-content:center; font-size:20px;">${escapeHtml(sub.icon)}</div>
                       <div>
-                        <div style="font-size:11px; font-weight:700; color:var(--text-muted);">${sub.category}</div>
-                        <div style="font-weight:800; font-size:16px;">${sub.name}</div>
+                        <div style="font-size:11px; font-weight:700; color:var(--text-muted);">${escapeHtml(sub.category)}</div>
+                        <div style="font-weight:800; font-size:16px;">${escapeHtml(sub.name)}</div>
                       </div>
                     </div>
-                    <button onclick="toggleFavoriteSubject('${sub.id}', event)" title="Favorit entfernen" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px;">⭐</button>
+                    <button onclick="toggleFavoriteSubject('${safeSubId}', event)" title="Favorit entfernen" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px;">⭐</button>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span class="count-pill">${sub.folders.length} Ordner • ${totalQ} Fragen</span>
-                    <button class="nav-item" style="width:auto; color:var(--accent); padding:4px 8px;" onclick="navigate('subject-${sub.id}')">Öffnen →</button>
+                    <button class="nav-item" style="width:auto; color:var(--accent); padding:4px 8px;" onclick="navigate('subject-${safeSubId}')">Öffnen →</button>
                   </div>
                 </div>
               `;
@@ -3888,11 +3909,11 @@
                 return `
                   <div class="exam-item-box">
                     <div>
-                      <strong>${sender ? sender.name : "Unbekannt"}</strong> möchte sich mit dir vernetzen, um zu chatten und Kalender/Termine zu teilen.
+                      <strong>${escapeHtml(sender ? sender.name : "Unbekannt")}</strong> möchte sich mit dir vernetzen, um zu chatten und Kalender/Termine zu teilen.
                     </div>
                     <div style="display:flex; gap:8px;">
-                      <button class="btn-primary" style="padding:6px 12px; font-size:12.5px;" onclick="acceptFriendRequest('${req.id}')">✅ Annehmen</button>
-                      <button class="btn-danger" onclick="declineFriendRequest('${req.id}')">Ablehnen</button>
+                      <button class="btn-primary" style="padding:6px 12px; font-size:12.5px;" onclick="acceptFriendRequest('${escapeJsSingle(req.id)}')">✅ Annehmen</button>
+                      <button class="btn-danger" onclick="declineFriendRequest('${escapeJsSingle(req.id)}')">Ablehnen</button>
                     </div>
                   </div>
                 `;
@@ -3907,7 +3928,7 @@
                      id="friendSearchInput"
                      class="input-field"
                      style="margin-top:0; margin-bottom:12px;"
-                     value="${friendSearchQuery.replace(/"/g, '&quot;')}"
+                     value="${escapeHtml(friendSearchQuery)}"
                      placeholder="Name oder E-Mail suchen..."
                      oninput="friendSearchQuery = this.value; renderView();">
 
@@ -3915,12 +3936,12 @@
               ${filteredFriends.length === 0
                 ? `<p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">Keine passenden Freunde gefunden.</p>`
                 : filteredFriends.map(f => `
-                    <div class="friend-row ${f.id === activeChatPartnerId ? 'active' : ''}" onclick="activeChatPartnerId=${f.id}; renderView();">
+                    <div class="friend-row ${f.id === activeChatPartnerId ? 'active' : ''}" onclick="activeChatPartnerId=${Number(f.id)}; renderView();">
                       <div style="display:flex; align-items:center; gap:10px;">
-                        <div class="avatar-circle" style="width:32px; height:32px; font-size:12px;">${f.initials}</div>
+                        <div class="avatar-circle" style="width:32px; height:32px; font-size:12px;">${escapeHtml(f.initials)}</div>
                         <div>
-                          <div style="font-weight:700; font-size:14px;">${f.name}</div>
-                          <div style="font-size:11.5px; color:var(--text-muted);">${f.role}</div>
+                          <div style="font-weight:700; font-size:14px;">${escapeHtml(f.name)}</div>
+                          <div style="font-size:11.5px; color:var(--text-muted);">${escapeHtml(f.role)}</div>
                         </div>
                       </div>
                       <span style="font-size:12px; color:var(--accent); font-weight:700;">Chat →</span>
@@ -3934,14 +3955,14 @@
                   ? `<p style="font-size:12px; color:var(--text-muted);">Keine weiteren Personen passend zur Suche.</p>`
                   : discoverUsers.map(u => `
                       <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:13px;">
-                        <span>${u.name}</span>
-                        <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="sendFriendRequest(${u.id})">+ Anfragen</button>
+                        <span>${escapeHtml(u.name)}</span>
+                        <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="sendFriendRequest(${Number(u.id)})">+ Anfragen</button>
                       </div>
                     `).join("")
                 }
                 ${outgoing.length > 0 ? `
                   <div style="margin-top:10px; font-size:12px; color:var(--text-muted);">
-                    ⏳ Ausstehend: ${outgoing.map(o => users.find(u => u.id === o.toId)?.name || "").join(", ")}
+                    ⏳ Ausstehend: ${escapeHtml(outgoing.map(o => users.find(u => u.id === o.toId)?.name || "").join(", "))}
                   </div>
                 ` : ""}
               </div>
@@ -3953,9 +3974,9 @@
                 : `
                   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px;">
                     <div style="display:flex; align-items:center; gap:10px;">
-                      <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${partner.initials}</div>
+                      <div class="avatar-circle" style="width:36px; height:36px; font-size:13px;">${escapeHtml(partner.initials)}</div>
                       <div>
-                        <div style="font-weight:800; font-size:16px;">${partner.name}</div>
+                        <div style="font-weight:800; font-size:16px;">${escapeHtml(partner.name)}</div>
                         <div style="font-size:12px; color:#10b981; font-weight:600;">🔒 Privater Freundes-Chat &amp; Kalender-Teilen</div>
                       </div>
                     </div>
@@ -3969,27 +3990,28 @@
                       ? `<div style="text-align:center; color:var(--text-muted); font-size:13px; margin:auto;">Noch keine Nachrichten. Schreib hallo, teile deinen Kalender oder sende einen Prüfungstermin!</div>`
                       : thread.map(m => {
                           const isMe = m.fromId === currentUser.id;
+                          const safeMsgId = escapeJsSingle(m.id);
                           return `
                             <div class="chat-bubble ${isMe ? 'me' : 'other'}">
-                              <div>${m.text}</div>
+                              <div>${escapeHtml(m.text)}</div>
                               ${m.examData ? `
                                 <div class="shared-exam-card">
-                                  <div style="font-size:11.5px; font-weight:700; color:#b45309;">📅 ${m.examData.subject} • ${m.examData.date}</div>
-                                  <div style="font-weight:800; font-size:14px; margin:3px 0;">${m.examData.title}</div>
-                                  ${m.examData.notes ? `<div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">${m.examData.notes}</div>` : ""}
-                                  ${!isMe ? `<button class="btn-primary" style="padding:5px 10px; font-size:12px; margin-top:4px;" onclick="adoptSharedExam('${m.id}')">+ In meinen Kalender übernehmen</button>` : `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">✓ Termin gesendet</div>`}
+                                  <div style="font-size:11.5px; font-weight:700; color:#b45309;">📅 ${escapeHtml(m.examData.subject)} • ${escapeHtml(m.examData.date)}</div>
+                                  <div style="font-weight:800; font-size:14px; margin:3px 0;">${escapeHtml(m.examData.title)}</div>
+                                  ${m.examData.notes ? `<div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">${escapeHtml(m.examData.notes)}</div>` : ""}
+                                  ${!isMe ? `<button class="btn-primary" style="padding:5px 10px; font-size:12px; margin-top:4px;" onclick="adoptSharedExam('${safeMsgId}')">+ In meinen Kalender übernehmen</button>` : `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">✓ Termin gesendet</div>`}
                                 </div>
                               ` : ""}
                               ${m.calendarShare ? `
                                 <div class="shared-exam-card">
-                                  <div style="font-size:12px; font-weight:800; color:#b45309;">📆 Geteilter Prüfungskalender von ${m.calendarShare.ownerName}</div>
+                                  <div style="font-size:12px; font-weight:800; color:#b45309;">📆 Geteilter Prüfungskalender von ${escapeHtml(m.calendarShare.ownerName)}</div>
                                   <ul class="shared-calendar-list">
-                                    ${m.calendarShare.items.map(it => `<li><strong>${it.date}</strong> – ${it.subject}: ${it.title}</li>`).join("")}
+                                    ${m.calendarShare.items.map(it => `<li><strong>${escapeHtml(it.date)}</strong> – ${escapeHtml(it.subject)}: ${escapeHtml(it.title)}</li>`).join("")}
                                   </ul>
-                                  ${!isMe ? `<button class="btn-primary" style="padding:5px 10px; font-size:12px; margin-top:4px;" onclick="adoptSharedCalendar('${m.id}')">📥 Alle Termine in meinen Kalender übernehmen</button>` : `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">✓ Kalender geteilt</div>`}
+                                  ${!isMe ? `<button class="btn-primary" style="padding:5px 10px; font-size:12px; margin-top:4px;" onclick="adoptSharedCalendar('${safeMsgId}')">📥 Alle Termine in meinen Kalender übernehmen</button>` : `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">✓ Kalender geteilt</div>`}
                                 </div>
                               ` : ""}
-                              <span class="chat-meta">${isMe ? 'Du' : partner.name} · ${m.time}</span>
+                              <span class="chat-meta">${isMe ? 'Du' : escapeHtml(partner.name)} · ${escapeHtml(m.time)}</span>
                             </div>
                           `;
                         }).join("")
@@ -3997,7 +4019,7 @@
                   </div>
 
                   <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <input type="text" id="chatTextInput" class="input-field" style="margin:0;" placeholder="Nachricht an ${partner.name} schreiben..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+                    <input type="text" id="chatTextInput" class="input-field" style="margin:0;" placeholder="Nachricht an ${escapeHtml(partner.name)} schreiben..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
                     <button class="btn-primary" onclick="sendChatMessage()">Senden →</button>
                   </div>
 
@@ -4007,7 +4029,7 @@
                       <select id="chatExamSelect" class="select-field" style="margin:0; flex:1; min-width:200px;">
                         ${exams.length === 0
                           ? `<option value="">Keine Termine im Kalender vorhanden</option>`
-                          : exams.map(ex => `<option value="${ex.id}">${ex.date} – ${ex.subject}: ${ex.title}</option>`).join("")
+                          : exams.map(ex => `<option value="${escapeHtml(ex.id)}">${escapeHtml(ex.date)} – ${escapeHtml(ex.subject)}: ${escapeHtml(ex.title)}</option>`).join("")
                         }
                       </select>
                       <button class="btn-secondary" style="border-color:var(--accent); color:var(--accent); font-weight:700;" onclick="shareExamInChat()">📤 Termin senden</button>
@@ -4046,7 +4068,7 @@
               <div>
                 <label style="font-size:13px; font-weight:600;">Fach *</label>
                 <select id="newExamSubject" class="select-field">
-                  ${subjects.map(s => `<option value="${s.name}">${s.icon} ${s.name}</option>`).join("")}
+                  ${subjects.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.icon)} ${escapeHtml(s.name)}</option>`).join("")}
                   <option value="Sonstiges">📚 Sonstiges</option>
                 </select>
               </div>
@@ -4075,13 +4097,13 @@
                   return `
                     <div class="setting-row">
                       <div>
-                        <div style="font-size:12px; color:var(--accent); font-weight:700;">${ex.subject} • ${ex.date}</div>
-                        <div style="font-weight:800; font-size:15px; margin-top:2px;">${ex.title}</div>
-                        ${ex.notes ? `<div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">📝 ${ex.notes}</div>` : ""}
+                        <div style="font-size:12px; color:var(--accent); font-weight:700;">${escapeHtml(ex.subject)} • ${escapeHtml(ex.date)}</div>
+                        <div style="font-weight:800; font-size:15px; margin-top:2px;">${escapeHtml(ex.title)}</div>
+                        ${ex.notes ? `<div style="font-size:12.5px; color:var(--text-muted); margin-top:2px;">📝 ${escapeHtml(ex.notes)}</div>` : ""}
                       </div>
                       <div style="display:flex; align-items:center; gap:8px;">
-                        <span class="days-badge">${formatDaysBadge(diff)}</span>
-                        <button class="btn-danger" onclick="deleteExam('${ex.id}')">Löschen</button>
+                        <span class="days-badge">${escapeHtml(formatDaysBadge(diff))}</span>
+                        <button class="btn-danger" onclick="deleteExam('${escapeJsSingle(ex.id)}')">Löschen</button>
                       </div>
                     </div>
                   `;
@@ -4134,7 +4156,7 @@
                 <button class="btn-secondary" style="${activeCalcTab === 'ohm' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='ohm'; renderView();">⚡ Elektrotechnik ($U, R, I$)</button>
                 <button class="btn-secondary" style="${activeCalcTab === 'quad' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='quad'; renderView();">📐 Quadratische Gleichung</button>
                 ${customFormulaFolders.map(ff => `
-                  <button class="btn-secondary" style="${activeCalcTab === 'folder:' + ff.id ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='folder:${ff.id}'; renderView();">📁 ${ff.name}</button>
+                  <button class="btn-secondary" style="${activeCalcTab === 'folder:' + ff.id ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='folder:${escapeJsSingle(ff.id)}'; renderView();">📁 ${escapeHtml(ff.name)}</button>
                 `).join("")}
                 <button class="btn-secondary" style="${activeCalcTab === 'ai-custom' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="activeCalcTab='ai-custom'; renderView();">🤖 KI-Formeln (${customFormulas.length})</button>
               </div>
@@ -4180,24 +4202,25 @@
 
         if (!activeFolderId && sub.folders.length > 0) activeFolderId = sub.folders[0].id;
         const currentFolder = sub.folders.find(f => f.id === activeFolderId);
+        const safeSubId = escapeJsSingle(sub.id);
 
         container.innerHTML = `
           <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
               <div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="count-pill">${sub.category}</span>
-                  <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleFavoriteSubject('${sub.id}', event)">
+                  <span class="count-pill">${escapeHtml(sub.category)}</span>
+                  <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleFavoriteSubject('${safeSubId}', event)">
                     ${sub.favorite ? '⭐ Favorisiert (Entfernen)' : '☆ Als Favorit merken'}
                   </button>
                 </div>
-                <h3 style="margin-top:8px;">Unterordner in ${sub.name}</h3>
+                <h3 style="margin-top:8px;">Unterordner in ${escapeHtml(sub.name)}</h3>
               </div>
               ${isAdmin() ? `
               <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:200px;" placeholder="Neuer Unterordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createNewFolder('${sub.id}');}">
-                <button type="button" class="btn-primary" onclick="createNewFolder('${sub.id}')">+ Ordner</button>
-                ${currentFolder ? `<button type="button" class="btn-danger" style="padding:10px 12px; font-size:13px;" onclick="deleteFolder('${sub.id}', '${currentFolder.id}')">🗑️ Ordner löschen</button>` : ""}
+                <input type="text" id="newFolderNameInput" class="input-field" style="margin:0; width:200px;" placeholder="Neuer Unterordner..." onkeydown="if(event.key==='Enter'){event.preventDefault();createNewFolder('${safeSubId}');}">
+                <button type="button" class="btn-primary" onclick="createNewFolder('${safeSubId}')">+ Ordner</button>
+                ${currentFolder ? `<button type="button" class="btn-danger" style="padding:10px 12px; font-size:13px;" onclick="deleteFolder('${safeSubId}', '${escapeJsSingle(currentFolder.id)}')">🗑️ Ordner löschen</button>` : ""}
               </div>
               ` : ""}
             </div>
@@ -4208,15 +4231,15 @@
                 : sub.folders.map(f => `
                   <button class="btn-secondary"
                           style="${f.id === activeFolderId ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}"
-                          onclick="activeFolderId='${f.id}'; renderView();">
-                    📁 ${f.name} (${f.questions.length})
+                          onclick="activeFolderId='${escapeJsSingle(f.id)}'; renderView();">
+                    📁 ${escapeHtml(f.name)} (${f.questions.length})
                   </button>
                 `).join("")
               }
             </div>
 
             ${currentFolder ? `
-              <h4 style="margin-bottom:12px;">Fragen im Ordner „${currentFolder.name}“</h4>
+              <h4 style="margin-bottom:12px;">Fragen im Ordner „${escapeHtml(currentFolder.name)}“</h4>
               ${currentFolder.questions.length === 0
                 ? `<p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">Noch keine Fragen in diesem Unterordner. Füge unten direkt eine neue Frage hinzu!</p>`
                 : currentFolder.questions.map((q, i) => renderQuestionBlock(q, i + 1, isAdmin(), sub.id, currentFolder.id)).join("")
@@ -4234,7 +4257,7 @@
 
               ${isAdmin() ? `
               <div style="margin-top:24px; padding-top:18px; border-top:1px solid var(--border);">
-                <h4 style="margin-bottom:10px;">➕ Neue Frage in „${currentFolder.name}“ einfügen (nur Admin)</h4>
+                <h4 style="margin-bottom:10px;">➕ Neue Frage in „${escapeHtml(currentFolder.name)}“ einfügen (nur Admin)</h4>
                 <div class="form-grid-2">
                   <div>
                     <label style="font-size:13px; font-weight:600;">Fragetyp</label>
@@ -4273,7 +4296,7 @@
                 <label style="font-size:13px; font-weight:600;">Lösungsweg / Erklärung (optional)</label>
                 <input type="text" id="newQExpl" class="input-field" placeholder="Kurze Erklärung für die Auswertung...">
 
-                <button class="btn-primary" onclick="addQuestionToFolder('${sub.id}', '${currentFolder.id}')">💾 Frage im Unterordner speichern</button>
+                <button class="btn-primary" onclick="addQuestionToFolder('${safeSubId}', '${escapeJsSingle(currentFolder.id)}')">💾 Frage im Unterordner speichern</button>
 
                 <div class="ai-code-box">
                   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -4281,10 +4304,10 @@
                       <strong style="font-size:14px;">🤖 KI-Code für Fragen einfügen</strong>
                       <div style="font-size:12px; color:var(--text-muted);">Füge hier einfach den von der KI erstellten Fragen-Code ein – den Rest erledigt das System.</div>
                     </div>
-                    <button class="btn-secondary" onclick="copyAiPromptForFolder('${sub.name.replace(/'/g, "\\'")}', '${currentFolder.name.replace(/'/g, "\\'")}')">📋 KI-Prompt kopieren</button>
+                    <button class="btn-secondary" onclick="copyAiPromptForFolder('${escapeJsSingle(sub.name)}', '${escapeJsSingle(currentFolder.name)}')">📋 KI-Prompt kopieren</button>
                   </div>
                   <textarea id="aiCodePasteArea" class="code-textarea" placeholder='[{"type":"mc","question":"Frage...","options":["A","B","C","D"],"correct":"A","explanation":"Erklärung"}]'></textarea>
-                  <button class="btn-primary" onclick="importAiQuestionsToFolder('${sub.id}', '${currentFolder.id}')">⚡ Fragen-Code direkt einfügen</button>
+                  <button class="btn-primary" onclick="importAiQuestionsToFolder('${safeSubId}', '${escapeJsSingle(currentFolder.id)}')">⚡ Fragen-Code direkt einfügen</button>
                   <div id="aiImportMsg"></div>
                 </div>
               </div>
@@ -4302,43 +4325,28 @@
         container.innerHTML = `
           <div class="card">
             <h3 style="margin-bottom:4px;">Darstellung &amp; Design</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Deine Auswahl wird automatisch gespeichert.</p>
-
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Passe Design und Akzentfarbe an deinen Geschmack an.</p>
             <div class="setting-row">
-              <div>
-                <strong>Farbmodus (Light / Dark Mode)</strong>
-                <div style="font-size:13px; color:var(--text-muted);">Wechsle zwischen hellem Tagesmodus und dunklem Nachtmodus.</div>
-              </div>
+              <div><strong>Farbmodus</strong><div style="font-size:12px; color:var(--text-muted);">Zwischen hellem und dunklem Design wechseln</div></div>
               <div style="display:flex; gap:8px;">
-                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="setTheme('light')">☀️ Light Mode</button>
-                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="setTheme('dark')">🌙 Dark Mode</button>
+                <button class="btn-secondary" style="${currentTheme === 'light' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('light')">☀️ Hell</button>
+                <button class="btn-secondary" style="${currentTheme === 'dark' ? 'border-color:var(--accent); color:var(--accent); font-weight:700;' : ''}" onclick="setTheme('dark')">🌙 Dunkel</button>
               </div>
             </div>
-
             <div class="setting-row">
-              <div>
-                <strong>Akzentfarbe der Website</strong>
-                <div style="font-size:13px; color:var(--text-muted);">Bestimmt die Farbe von Buttons, Icons und aktiven Reitern.</div>
-              </div>
-              <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                ${colors.map(c => `
-                  <div class="swatch ${c.toLowerCase() === currentAccent.toLowerCase() ? 'active' : ''}"
-                       style="background:${c};"
-                       onclick="setAccentColor('${c}')"></div>
-                `).join("")}
-                <input type="color" value="${currentAccent}" onchange="setAccentColor(this.value)" style="width:34px; height:34px; border:none; background:none; cursor:pointer;" title="Eigene Farbe">
+              <div><strong>Akzentfarbe</strong><div style="font-size:12px; color:var(--text-muted);">Buttons, aktive Menüs und Highlights</div></div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                ${colors.map(c => `<div class="swatch ${currentAccent === c ? 'active' : ''}" style="background:${c};" onclick="setAccentColor('${c}')"></div>`).join("")}
               </div>
             </div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">🔑 Eigenes Passwort ändern</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Angemeldet als <strong>${currentUser.name}</strong> (${currentUser.email}). Hier kannst du dein persönliches Login-Passwort jederzeit ändern.
-            </p>
+            <h3 style="margin-bottom:4px;">🔐 Eigenes Passwort ändern</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Angemeldet als <strong>${escapeHtml(currentUser.name)}</strong> (${escapeHtml(currentUser.email)})</p>
             <div class="form-grid-2">
               <div>
-                <label style="font-size:13px; font-weight:600;">Neues Passwort</label>
+                <label style="font-size:13px; font-weight:600;">Neues Passwort (mind. 4 Zeichen)</label>
                 <input type="password" id="settingsNewPwd1" class="input-field" placeholder="Neues Passwort...">
               </div>
               <div>
@@ -4353,32 +4361,27 @@
       }
       else if (currentView === "admin") {
         if (!isAdmin()) {
-          currentView = "home";
-          renderView();
+          container.innerHTML = `<div class="card"><h3>Zugriff verweigert</h3><p>Nur Admins haben Zugriff auf diesen Bereich.</p></div>`;
           return;
         }
-        heading.innerText = "🛡️ Admin: Benutzer & Kurse";
+        heading.innerText = "🛡️ Admin (Benutzer & Kurse)";
+        const editingSub = subjects.find(s => s.id === editingSubjectId);
         const availableRoles = getAllAvailableRoles();
 
         container.innerHTML = `
           <div class="card">
-            <h3 style="margin-bottom:4px;">➕ Neues Unterrichtsfach anlegen (nur Admin)</h3>
+            <h3 style="margin-bottom:4px;">➕ Neues Unterrichtsfach anlegen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Lege ein neues Fach inklusive erstem Unterordner an. Nur Benutzer mit Admin-Rechten können Fächer erstellen oder löschen.
+              Erstellt ein neues Fach mit eigenem Start-Unterordner und blendet es sofort in der Seitenleiste sowie in der Kurs- &amp; Rechteverwaltung ein.
             </p>
-
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Fachname *</label>
-                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Konstruktionslehre oder SQL" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
+                <input type="text" id="newSubjectNameInput" class="input-field" placeholder="z. B. Konstruktionslehre oder Chemie" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateSubject();}">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Erster Unterordner (optional)</label>
-                <input type="text" id="newSubjectFirstFolderInput" class="input-field" placeholder="Standard: Grundlagen">
-              </div>
-              <div>
-                <label style="font-size:13px; font-weight:600;">Icon / Emoji (optional)</label>
-                <input type="text" id="newSubjectIconInput" class="input-field" placeholder="Standard: 📘 (z. B. 🛠️, 💻, 📊)">
+                <label style="font-size:13px; font-weight:600;">Icon / Emoji</label>
+                <input type="text" id="newSubjectIconInput" class="input-field" value="📘" maxlength="6">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Bereich / Kategorie</label>
@@ -4386,82 +4389,71 @@
                   <option value="TECHNIK">TECHNIK</option>
                   <option value="HAUPTFACH">HAUPTFACH</option>
                   <option value="MATURA">MATURA</option>
-                  <option value="ALLGEMEIN">ALLGEMEIN</option>
+                  <option value="SONSTIGES">SONSTIGES</option>
                 </select>
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">Farbe</label>
-                <input type="color" id="newSubjectColorInput" value="#2563eb" style="width:48px; height:38px; border:1px solid var(--border); border-radius:8px; background:none; cursor:pointer; display:block; margin-top:6px;">
+                <label style="font-size:13px; font-weight:600;">Erster Unterordner</label>
+                <input type="text" id="newSubjectFirstFolderInput" class="input-field" value="Grundlagen">
               </div>
-              <div style="display:flex; align-items:flex-end; padding-bottom:14px;">
-                <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:13.5px; cursor:pointer;">
-                  <input type="checkbox" id="newSubjectAccessAllInput" checked> Für alle Benutzer sichtbar
+              <div>
+                <label style="font-size:13px; font-weight:600;">Markierungsfarbe</label>
+                <input type="color" id="newSubjectColorInput" class="input-field" style="height:42px; padding:4px;" value="#2563eb">
+              </div>
+              <div style="display:flex; align-items:center; padding-top:16px;">
+                <label class="user-check-label" style="width:100%;">
+                  <input type="checkbox" id="newSubjectAccessAllInput" checked>
+                  <span>Sofort für alle Benutzer freischalten</span>
                 </label>
               </div>
             </div>
-
-            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach jetzt anlegen</button>
+            <button type="button" class="btn-primary" onclick="adminCreateSubject()">➕ Unterrichtsfach erstellen</button>
             <div id="newSubjectFeedback"></div>
-
-            <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
-              <div style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">Vorhandene Unterrichtsfächer (${subjects.length})</div>
-              ${subjects.map(s => `
-                <div class="setting-row" style="padding:8px 0;">
-                  <div>
-                    <strong>${s.icon} ${s.name}</strong>
-                    <span class="count-pill" style="margin-left:6px;">${s.category}</span>
-                    <span style="font-size:12px; color:var(--text-muted); margin-left:6px;">${s.folders.length} Ordner</span>
-                  </div>
-                  <button type="button" class="btn-danger" onclick="adminDeleteSubject('${s.id}')">Fach löschen</button>
-                </div>
-              `).join("")}
-            </div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">🎭 Rollen verwalten &amp; neue Rolle erstellen</h3>
+            <h3 style="margin-bottom:4px;">🎭 Rollen &amp; Berechtigungen verwalten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Neben <strong>Schüler</strong>, <strong>Lehrer</strong> und <strong>Admin</strong> kannst du eigene Rollen anlegen, umbenennen oder löschen und optional mit Admin-Rechten ausstatten.
+              Lege eigene Rollen an (z. B. <em>Tutor</em>, <em>Gast</em>, <em>Teamleiter</em>), lege fest, ob sie Admin-Rechte besitzen, und weise sie Benutzern zu.
             </p>
 
             <div class="form-grid-2" style="align-items:end;">
               <div>
                 <label style="font-size:13px; font-weight:600;">Name der neuen Rolle *</label>
-                <input type="text" id="adminNewRoleName" class="input-field" style="margin-bottom:0;" placeholder="z. B. Moderator, Tutor, Co-Admin" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
+                <input type="text" id="adminNewRoleName" class="input-field" placeholder="z. B. Tutor oder Gast" onkeydown="if(event.key==='Enter'){event.preventDefault();adminCreateCustomRole();}">
               </div>
-              <div style="padding-bottom:2px;">
-                <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:13.5px; cursor:pointer; padding:10px 0;">
-                  <input type="checkbox" id="adminNewRoleIsAdmin"> Admin-Rechte erteilen (darf Fächer, Fragen &amp; User verwalten)
+              <div>
+                <label class="user-check-label" style="margin-bottom:12px;">
+                  <input type="checkbox" id="adminNewRoleIsAdmin">
+                  <span>Admin-Rechte gewähren (Benutzer, Kurse &amp; Inhalte verwalten)</span>
                 </label>
               </div>
             </div>
+            <button type="button" class="btn-primary" onclick="adminCreateCustomRole()">+ Eigene Rolle speichern</button>
 
-            <button type="button" class="btn-primary" style="margin-top:12px;" onclick="adminCreateCustomRole()">+ Rolle speichern</button>
-
-            <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
-              <div style="font-size:12.5px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">Verfügbare Rollen (${availableRoles.length})</div>
+            <div style="margin-top:16px;">
               ${availableRoles.map(r => `
-                <div class="setting-row" style="padding:8px 0;">
+                <div class="setting-row">
                   <div>
-                    <strong>${r.name}</strong>
-                    ${r.isAdminRole ? `<span class="role-badge" style="margin-left:6px;">Admin-Rechte</span>` : `<span class="count-pill" style="margin-left:6px;">Standard-Rechte</span>`}
-                    ${r.builtIn ? `<span style="font-size:12px; color:var(--text-muted); margin-left:6px;">(Systemrolle)</span>` : ""}
+                    <strong>${escapeHtml(r.name)}</strong>
+                    <span class="role-badge" style="margin-left:6px;">${r.isAdminRole ? "Admin-Rechte" : "Standard-Rechte"}</span>
+                    <span class="count-pill" style="margin-left:6px;">${r.builtIn ? "Systemrolle" : "Eigene Rolle"}</span>
                   </div>
-                  ${r.builtIn ? "" : `
+                  ${!r.builtIn ? `
                     <div style="display:flex; gap:8px;">
-                      <button type="button" class="btn-secondary" style="padding:5px 10px; font-size:12px;" onclick="adminRenameCustomRole('${r.name.replace(/'/g, "\\'")}')">Umbenennen</button>
-                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${r.name.replace(/'/g, "\\'")}')">Löschen</button>
+                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminRenameCustomRole('${escapeJsSingle(r.name)}')">Umbenennen</button>
+                      <button type="button" class="btn-danger" onclick="adminDeleteCustomRole('${escapeJsSingle(r.name)}')">Löschen</button>
                     </div>
-                  `}
+                  ` : `<span style="font-size:12px; color:var(--text-muted);">Fest integriert</span>`}
                 </div>
               `).join("")}
             </div>
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">👤 Neuen Benutzer anlegen (mit Initialpasswort)</h3>
+            <h3 style="margin-bottom:4px;">👤 Neuen Benutzer anlegen &amp; Initialpasswort vergeben</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Vergib einen Namen und ein Initialpasswort. Beim ersten Login mit dem Initialpasswort wird der Benutzer aufgefordert, ein eigenes Passwort festzulegen.
+              Der Benutzer loggt sich mit seinem Namen/E-Mail und dem Initialpasswort ein und wird beim ersten Start aufgefordert, ein eigenes Passwort zu vergeben.
             </p>
             <div class="form-grid-2">
               <div>
@@ -4469,101 +4461,110 @@
                 <input type="text" id="adminNewUserName" class="input-field" placeholder="z. B. Anna M.">
               </div>
               <div>
+                <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
+                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="z. B. anna@lernen-mit-gerry.at">
+              </div>
+              <div>
                 <label style="font-size:13px; font-weight:600;">Initialpasswort / Invite-Code *</label>
                 <input type="text" id="adminNewUserInitPwd" class="input-field" placeholder="z. B. ANNA-2026">
               </div>
               <div>
-                <label style="font-size:13px; font-weight:600;">E-Mail (optional)</label>
-                <input type="text" id="adminNewUserEmail" class="input-field" placeholder="wird sonst automatisch erzeugt">
-              </div>
-              <div>
                 <label style="font-size:13px; font-weight:600;">Rolle</label>
                 <select id="adminNewUserRole" class="select-field">
-                  ${availableRoles.map(r => `<option value="${r.name}">${r.name}${r.isAdminRole ? " (Admin)" : ""}</option>`).join("")}
+                  ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join("")}
                 </select>
               </div>
             </div>
             <button class="btn-primary" onclick="adminCreateUser()">+ Benutzer anlegen</button>
-          </div>
 
-          <div class="card">
-            <h3 style="margin-bottom:12px;">Alle Benutzer (${users.length})</h3>
-            ${users.map(u => {
-              const userHasRoleInList = availableRoles.some(r => r.name === u.role);
-              const roleOptionsHtml = userHasRoleInList
-                ? availableRoles.map(r => `<option value="${r.name}" ${u.role === r.name ? 'selected' : ''}>${r.name}</option>`).join("")
-                : `<option value="${u.role}" selected>${u.role}</option>` + availableRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join("");
-
-              return `
+            <div style="margin-top:20px;">
+              <h4 style="margin-bottom:8px;">Vorhandene Benutzer (${users.length})</h4>
+              ${users.map(u => `
                 <div class="setting-row">
                   <div>
-                    <strong>${u.name}</strong>
-                    <span class="role-badge" style="margin-left:6px;">${u.role}</span>
-                    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-                      ${u.email} • ${u.points || 0} Pkt • ${u.streak || 0}d 🔥 •
-                      ${u.mustChangePassword
-                        ? `Initialpasswort aktiv: <code>${u.password}</code>`
-                        : `Persönliches Passwort gesetzt`}
-                    </div>
+                    <strong>${escapeHtml(u.name)}</strong> <span class="role-badge">${escapeHtml(u.role)}</span>
+                    <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(u.email)} • ${Number(u.points) || 0} Pkt • ${Number(u.streak) || 0}d 🔥 • ${u.mustChangePassword ? '⏳ Muss Passwort ändern' : '✅ Eigenes Passwort aktiv'}</div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${u.id}, this.value)" title="Rolle ändern">
-                      ${roleOptionsHtml}
+                    <select class="select-field" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px;" onchange="adminChangeUserRole(${Number(u.id)}, this.value)">
+                      ${availableRoles.map(r => `<option value="${escapeHtml(r.name)}" ${u.role === r.name ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join("")}
                     </select>
-                    <button class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="adminResetUserPassword(${u.id})">🔑 Initial-PW setzen</button>
-                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${u.id})">Löschen</button>` : ""}
+                    <button class="btn-secondary" onclick="adminResetUserPassword(${Number(u.id)})">🔑 Initialpasswort setzen</button>
+                    ${u.id !== currentUser.id ? `<button class="btn-danger" onclick="adminDeleteUser(${Number(u.id)})">Löschen</button>` : `<span style="font-size:12px; color:var(--text-muted);">Aktiv</span>`}
                   </div>
                 </div>
-              `;
-            }).join("")}
+              `).join("")}
+            </div>
           </div>
 
           <div class="card">
             <h3 style="margin-bottom:4px;">🔐 Kurs- &amp; Fachberechtigungen</h3>
-            <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">Lege fest, welche Benutzer Zugriff auf welches Unterrichtsfach haben.</p>
-            ${subjects.map(sub => `
-              <div class="setting-row">
-                <div>
-                  <strong>${sub.icon} ${sub.name}</strong>
-                  <div style="font-size:12px; color:var(--text-muted);">
-                    ${sub.accessAll ? "Für alle Benutzer freigeschaltet" : `Eingeschränkt (${sub.allowedUsers.length} Benutzer)`}
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Lege fest, welche Benutzer Zugriff auf welche Fächer haben oder lösche nicht mehr benötigte Fächer.</p>
+            ${subjects.map(sub => {
+              const safeSubId = escapeJsSingle(sub.id);
+              return `
+                <div class="setting-row">
+                  <div>
+                    <strong>${escapeHtml(sub.icon)} ${escapeHtml(sub.name)}</strong>
+                    <div style="font-size:12px; color:var(--text-muted);">${sub.accessAll ? '🌍 Alle Benutzer' : `🔒 Ausgewählte Benutzer (${sub.allowedUsers.length})`}</div>
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn-secondary" onclick="openAccessModal('${safeSubId}')">Berechtigungen bearbeiten</button>
+                    <button class="btn-danger" onclick="adminDeleteSubject('${safeSubId}')">Fach löschen</button>
                   </div>
                 </div>
-                <button class="btn-secondary" onclick="openAccessModal('${sub.id}')">Zugriff bearbeiten</button>
-              </div>
-            `).join("")}
+              `;
+            }).join("")}
 
-            ${editingSubjectId ? renderAccessEditor() : ""}
+            ${editingSub ? `
+              <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+                <h4>Zugriff für: ${escapeHtml(editingSub.icon)} ${escapeHtml(editingSub.name)}</h4>
+                <label class="user-check-label" style="margin-top:10px; background:var(--accent-soft); border-color:var(--accent);">
+                  <input type="checkbox" id="modalAccessAll" ${editingSub.accessAll ? 'checked' : ''} onchange="toggleUserGridDisabled()">
+                  <strong>Für ALLE Benutzer freischalten</strong>
+                </label>
+                <div class="user-checkbox-grid" id="modalUserGrid">
+                  ${users.map(u => `
+                    <label class="user-check-label">
+                      <input type="checkbox" value="${Number(u.id)}" ${tempSelectedUsers.has(u.id) ? 'checked' : ''} onchange="toggleTempUser(${Number(u.id)}, this.checked)">
+                      <span>${escapeHtml(u.name)}</span>
+                    </label>
+                  `).join("")}
+                </div>
+                <div style="display:flex; gap:10px; margin-top:14px;">
+                  <button class="btn-primary" onclick="saveSubjectAccess()">Speichern</button>
+                  <button class="btn-secondary" onclick="editingSubjectId = null; renderView();">Abbrechen</button>
+                </div>
+              </div>
+            ` : ""}
           </div>
 
           <div class="card">
-            <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten (nur Admin)</h3>
+            <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-              Passe die Angaben im Impressum an. Änderungen werden sofort gespeichert und mit der Cloud synchronisiert.
+              Pflege die Angaben für die Seite <strong>Impressum</strong>. Änderungen werden lokal gespeichert und mit der Cloud synchronisiert.
             </p>
-
             <div class="form-grid-2">
               <div>
                 <label style="font-size:13px; font-weight:600;">Betreiber / Projektname</label>
-                <input type="text" id="adminImpOperator" class="input-field" value="${(imprintData.operatorName || '').replace(/"/g, '&quot;')}">
+                <input type="text" id="adminImpOperator" class="input-field" value="${escapeHtml(imprintData.operatorName || "")}">
               </div>
               <div>
                 <label style="font-size:13px; font-weight:600;">Kontakt-E-Mail</label>
-                <input type="text" id="adminImpEmail" class="input-field" value="${(imprintData.email || '').replace(/"/g, '&quot;')}">
+                <input type="text" id="adminImpEmail" class="input-field" value="${escapeHtml(imprintData.email || "")}">
               </div>
             </div>
-
             <label style="font-size:13px; font-weight:600;">Standort / Anschrift</label>
-            <input type="text" id="adminImpAddress" class="input-field" value="${(imprintData.address || '').replace(/"/g, '&quot;')}">
+            <input type="text" id="adminImpAddress" class="input-field" value="${escapeHtml(imprintData.address || "")}">
 
-            <label style="font-size:13px; font-weight:600;">Zweck des Angebots</label>
-            <textarea id="adminImpRole" class="textarea-field" style="min-height:70px;">${imprintData.websiteRole || ''}</textarea>
+            <label style="font-size:13px; font-weight:600;">Zweck des Lernportals</label>
+            <textarea id="adminImpRole" class="textarea-field">${escapeHtml(imprintData.websiteRole || "")}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
-            <textarea id="adminImpDisclaimer" class="textarea-field" style="min-height:70px;">${imprintData.disclaimer || ''}</textarea>
+            <textarea id="adminImpDisclaimer" class="textarea-field">${escapeHtml(imprintData.disclaimer || "")}</textarea>
 
             <label style="font-size:13px; font-weight:600;">Datenschutzhinweis</label>
-            <textarea id="adminImpPrivacy" class="textarea-field" style="min-height:70px;">${imprintData.privacyNote || ''}</textarea>
+            <textarea id="adminImpPrivacy" class="textarea-field">${escapeHtml(imprintData.privacyNote || "")}</textarea>
 
             <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
             <div id="adminImprintSavedMsg"></div>
@@ -4575,36 +4576,45 @@
     }
 
     function renderQuestionBlock(q, index, canDelete, subId, folderId) {
-      const delBtn = canDelete ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${subId}', '${folderId}', '${q.id}')">Löschen</button>` : "";
+      const safeQId = escapeJsSingle(q.id);
+      const domQId = escapeHtml(q.id);
+      const safeExpl = escapeJsSingle(q.explanation);
+      const delBtn = canDelete
+        ? `<button class="btn-danger" onclick="deleteQuestionFromFolder('${escapeJsSingle(subId)}', '${escapeJsSingle(folderId)}', '${safeQId}')">Löschen</button>`
+        : "";
+
       if (q.type === "mc") {
+        const safeCorr = escapeJsSingle(q.correct);
         return `
           <div class="question-card">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-              <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
+              <div style="font-weight:700; font-size:15px;">${index}. ${escapeHtml(q.question)}</div>
               ${delBtn}
             </div>
             <div style="margin-top:8px;">
               ${q.options.map(opt => `
-                <div class="mc-option" onclick="checkMcQuestion('${q.id}', '${opt.replace(/'/g, "\\'")}', '${q.correct.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}')">
-                  <span>🔘</span> <span>${opt}</span>
+                <div class="mc-option" onclick="checkMcQuestion('${safeQId}', '${escapeJsSingle(opt)}', '${safeCorr}', '${safeExpl}')">
+                  <span>🔘</span> <span>${escapeHtml(opt)}</span>
                 </div>
               `).join("")}
             </div>
-            <div id="fb-${q.id}"></div>
+            <div id="fb-${domQId}"></div>
           </div>
         `;
       } else {
+        const safeAns = escapeJsSingle(q.answer);
+        const inputId = `ans-${domQId}`;
         return `
           <div class="question-card">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-              <div style="font-weight:700; font-size:15px;">${index}. ${q.question}</div>
+              <div style="font-weight:700; font-size:15px;">${index}. ${escapeHtml(q.question)}</div>
               ${delBtn}
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
-              <input type="text" id="ans-${q.id}" class="input-field" style="margin:0;" placeholder="Ergebnis eingeben...">
-              <button class="btn-primary" onclick="checkFolderQuestion('${q.id}', '${q.answer.replace(/'/g, "\\'")}', '${q.explanation.replace(/'/g, "\\'")}')">Prüfen</button>
+              <input type="text" id="${inputId}" class="input-field" style="margin:0;" placeholder="Antwort eingeben...">
+              <button class="btn-primary" onclick="checkFolderQuestion('${safeQId}', document.getElementById('${escapeJsSingle(inputId)}').value, '${safeAns}', '${safeExpl}')">Prüfen</button>
             </div>
-            <div id="fb-${q.id}"></div>
+            <div id="fb-${domQId}"></div>
           </div>
         `;
       }
@@ -4616,186 +4626,138 @@
       document.getElementById("calcFieldsBox").style.display = type === "calc" ? "block" : "none";
     }
 
-    function copyAiPromptForFolder(subjectName, folderName) {
-      const promptText = `Erstelle 5 Lernfragen für das Fach "${subjectName}" im Ordner "${folderName}".
-Antworte AUSSCHLIESSLICH mit einem gültigen JSON-Array ohne Markdown oder Zusatztext in genau diesem Format:
-[
-  {
-    "type": "mc",
-    "question": "Fragestellung?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correct": "Option A",
-    "explanation": "Kurze Erklärung."
-  },
-  {
-    "type": "calc",
-    "question": "Rechenfrage mit Zahlenwerten?",
-    "answer": "42",
-    "explanation": "Kurzer Rechenweg."
-  }
-]`;
-      navigator.clipboard?.writeText(promptText).catch(() => {});
-      const msg = document.getElementById("aiImportMsg");
-      if (msg) {
-        msg.innerHTML = `<div class="result-banner result-ok">📋 KI-Prompt kopiert! Füge ihn in deine KI ein und kopiere das Ergebnis hier ins Textfeld.</div>`;
-      }
+    function copyAiPromptForFolder(subName, folderName) {
+      const promptText = `Erstelle 5 Lernfragen für das Fach "${subName}" und den Unterordner "${folderName}". Gib ausschließlich gültiges JSON ohne Markdown-Codeblöcke in diesem exakten Format zurück:\n[{"type":"mc","question":"Fragetext","options":["Opt 1","Opt 2","Opt 3","Opt 4"],"correct":"Opt 1","explanation":"Kurze Erklärung"},{"type":"calc","question":"Rechenfrage","answer":"42","explanation":"Lösungsweg"}]`;
+      navigator.clipboard?.writeText(promptText).then(() => {
+        alert("KI-Prompt kopiert! Füge ihn jetzt in deine KI ein und kopiere das Ergebnis zurück in das Feld darunter.");
+      }).catch(() => {
+        prompt("Kopiere diesen Prompt:", promptText);
+      });
     }
 
     function importAiQuestionsToFolder(subId, folderId) {
       if (!isAdmin()) return alert("Nur Admins dürfen Fragen importieren.");
       const raw = document.getElementById("aiCodePasteArea").value.trim();
-      const msg = document.getElementById("aiImportMsg");
+      const msgBox = document.getElementById("aiImportMsg");
       if (!raw) {
-        msg.innerHTML = `<div class="result-banner result-err">Bitte zuerst den KI-Code in das Textfeld einfügen.</div>`;
+        msgBox.innerHTML = `<div class="result-banner result-err">Bitte zuerst den KI-Code in das Textfeld einfügen.</div>`;
         return;
       }
 
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-
       let parsed;
       try {
         parsed = JSON.parse(cleaned);
       } catch (e) {
-        msg.innerHTML = `<div class="result-banner result-err">Ungültiges JSON-Format: ${e.message}</div>`;
+        msgBox.innerHTML = `<div class="result-banner result-err">Ungültiges JSON-Format: ${escapeHtml(e.message)}</div>`;
         return;
       }
 
-      const items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.questions) ? parsed.questions : null);
-      if (!items || items.length === 0) {
-        msg.innerHTML = `<div class="result-banner result-err">Es wurden keine Fragen im JSON gefunden.</div>`;
-        return;
-      }
-
+      const items = Array.isArray(parsed) ? parsed : [parsed];
       const sub = subjects.find(s => s.id === subId);
-      const folder = sub.folders.find(f => f.id === folderId);
-      let addedCount = 0;
+      const folder = sub?.folders.find(f => f.id === folderId);
+      if (!folder) return;
 
+      let added = 0;
       items.forEach((item, idx) => {
-        if (!item || !item.question) return;
-        const qType = item.type === "calc" ? "calc" : "mc";
-        const expl = String(item.explanation || "Keine Erklärung hinterlegt.");
-
-        if (qType === "calc" && item.answer !== undefined && String(item.answer).trim() !== "") {
-          folder.questions.push({
-            id: "q-ai-" + Date.now() + "-" + idx,
-            type: "calc",
-            question: String(item.question).trim(),
-            answer: String(item.answer).trim(),
-            explanation: expl
-          });
-          addedCount++;
-        } else if (Array.isArray(item.options) && item.options.length >= 2) {
-          const opts = item.options.map(o => String(o).trim()).filter(Boolean);
-          const corr = item.correct && opts.includes(String(item.correct).trim())
-            ? String(item.correct).trim()
-            : opts[0];
+        if (!item || typeof item !== "object" || !item.question) return;
+        const explanation = String(item.explanation || "Keine Erklärung hinterlegt.");
+        if (item.type === "mc" && Array.isArray(item.options) && item.options.length >= 2) {
+          const opts = item.options.map(String).filter(Boolean);
+          const corr = opts.includes(String(item.correct)) ? String(item.correct) : opts[0];
           folder.questions.push({
             id: "q-ai-" + Date.now() + "-" + idx,
             type: "mc",
-            question: String(item.question).trim(),
+            question: String(item.question),
             options: opts,
             correct: corr,
-            explanation: expl
+            explanation
           });
-          addedCount++;
+          added++;
+        } else if (item.answer !== undefined && String(item.answer).trim() !== "") {
+          folder.questions.push({
+            id: "q-ai-" + Date.now() + "-" + idx,
+            type: "calc",
+            question: String(item.question),
+            answer: String(item.answer).trim(),
+            explanation
+          });
+          added++;
         }
       });
 
-      if (addedCount === 0) {
-        msg.innerHTML = `<div class="result-banner result-err">Keine gültigen Fragen erkannt. Prüfe „type“, „question“ und „options“ bzw. „answer“.</div>`;
+      if (added === 0) {
+        msgBox.innerHTML = `<div class="result-banner result-err">Keine gültigen Fragen im Code erkannt.</div>`;
         return;
       }
 
       saveSubjects();
       renderSidebar();
       renderView();
-      const afterMsg = document.getElementById("aiImportMsg");
-      if (afterMsg) {
-        afterMsg.innerHTML = `<div class="result-banner result-ok">✅ ${addedCount} Frage(n) erfolgreich in „${folder.name}“ eingefügt!</div>`;
+      const afterBox = document.getElementById("aiImportMsg");
+      if (afterBox) {
+        afterBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Frage(n) erfolgreich in „${escapeHtml(folder.name)}“ eingefügt!</div>`;
       }
     }
 
-    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1")) || [];
+    let customFormulas = JSON.parse(localStorage.getItem("lmg_custom_formulas_v1") || "[]");
     function saveCustomFormulas() {
       localStorage.setItem("lmg_custom_formulas_v1", JSON.stringify(customFormulas));
       queueCloudSync();
     }
 
     function copyAiPromptForFormula() {
-      const promptText = `Erstelle eine Lernformel mit Erklärung, Variablentabelle und Rechner im JSON-Format.
-Antworte AUSSCHLIESSLICH mit gültigem JSON (ohne Markdown oder Zusatztext) in genau diesem Format:
-{
-  "title": "Name der Formel",
-  "category": "Fachgebiet",
-  "formula": "F = m \\\\cdot a",
-  "description": "Kurze, klare Erklärung wofür die Formel verwendet wird.",
-  "variables": [
-    { "symbol": "F", "meaning": "Kraft in Newton (N)" },
-    { "symbol": "m", "meaning": "Masse in Kilogramm (kg)" },
-    { "symbol": "a", "meaning": "Beschleunigung in m/s²" }
-  ],
-  "var1Label": "Masse m [kg]",
-  "var1Default": 10,
-  "var2Label": "Beschleunigung a [m/s²]",
-  "var2Default": 9.81,
-  "formulaType": "mul"
-}
-Erlaubte formulaType-Werte: "mul" (var1 * var2), "div" (var1 / var2), "add" (var1 + var2), "sub" (var1 - var2).`;
-      navigator.clipboard?.writeText(promptText).catch(() => {});
-      const msg = document.getElementById("aiFormulaMsg");
-      if (msg) {
-        msg.innerHTML = `<div class="result-banner result-ok">📋 Formel-Prompt kopiert! Füge ihn in deine KI ein und kopiere das JSON hier ins Textfeld.</div>`;
-      }
+      const promptText = `Erstelle eine technische oder mathematische Formel für meinen Rechner. Gib ausschließlich gültiges JSON ohne Markdown-Codeblöcke in diesem exakten Format zurück:\n{"title":"Titel der Formel","category":"Mechanik","formula":"M = F \\\\cdot l","description":"Kurze, klare Erklärung der Formel.","variables":[{"symbol":"M","meaning":"Drehmoment in Nm"},{"symbol":"F","meaning":"Kraft in N"},{"symbol":"l","meaning":"Hebelarm in m"}],"var1Label":"Kraft F [N]","var1Default":250,"var2Label":"Hebel l [m]","var2Default":0.4,"formulaType":"mul"}`;
+      navigator.clipboard?.writeText(promptText).then(() => {
+        alert("Formel-Prompt kopiert!");
+      }).catch(() => {
+        prompt("Kopiere diesen Prompt:", promptText);
+      });
     }
 
     function importAiFormulaCode() {
-      if (!isAdmin()) return alert("Nur Admins dürfen Formeln importieren.");
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln hinzufügen.");
       const raw = document.getElementById("aiFormulaCodeArea").value.trim();
-      const msg = document.getElementById("aiFormulaMsg");
+      const msgBox = document.getElementById("aiFormulaMsg");
       if (!raw) {
-        msg.innerHTML = `<div class="result-banner result-err">Bitte zuerst den Formel-Code einfügen.</div>`;
+        msgBox.innerHTML = `<div class="result-banner result-err">Bitte zuerst den KI-Formel-Code einfügen.</div>`;
         return;
       }
 
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-
       let parsed;
       try {
         parsed = JSON.parse(cleaned);
       } catch (e) {
-        msg.innerHTML = `<div class="result-banner result-err">Ungültiges JSON: ${e.message}</div>`;
+        msgBox.innerHTML = `<div class="result-banner result-err">Ungültiges JSON-Format: ${escapeHtml(e.message)}</div>`;
         return;
       }
 
       const list = Array.isArray(parsed) ? parsed : [parsed];
       let added = 0;
-
-      list.forEach((item, idx) => {
-        if (!item || !item.title || !item.formula) return;
-        const cleanVars = Array.isArray(item.variables)
-          ? item.variables
-              .filter(v => v && v.symbol && v.meaning)
-              .map(v => ({ symbol: String(v.symbol).trim(), meaning: String(v.meaning).trim() }))
+      list.forEach((f, idx) => {
+        if (!f || typeof f !== "object" || !f.title || !f.formula) return;
+        const safeVars = Array.isArray(f.variables)
+          ? f.variables.filter(v => v && v.symbol && v.meaning).map(v => ({ symbol: String(v.symbol), meaning: String(v.meaning) }))
           : [];
-
         customFormulas.push({
           id: "cf-" + Date.now() + "-" + idx,
-          title: String(item.title).trim(),
-          category: String(item.category || "Allgemein").trim(),
-          formula: String(item.formula).trim(),
-          description: String(item.description || "").trim(),
-          variables: cleanVars,
-          var1Label: String(item.var1Label || "Wert 1").trim(),
-          var1Default: Number(item.var1Default ?? 10),
-          var2Label: String(item.var2Label || "Wert 2").trim(),
-          var2Default: Number(item.var2Default ?? 5),
-          formulaType: ["mul", "div", "add", "sub"].includes(item.formulaType) ? item.formulaType : "mul"
+          title: String(f.title),
+          category: String(f.category || "KI-Formel"),
+          formula: String(f.formula),
+          description: String(f.description || ""),
+          variables: safeVars,
+          var1Label: String(f.var1Label || "Wert 1"),
+          var1Default: Number(f.var1Default) || 10,
+          var2Label: String(f.var2Label || "Wert 2"),
+          var2Default: Number(f.var2Default) || 2,
+          formulaType: ["mul", "div", "add", "sub"].includes(f.formulaType) ? f.formulaType : "mul"
         });
         added++;
       });
 
       if (added === 0) {
-        msg.innerHTML = `<div class="result-banner result-err">Keine gültige Formel erkannt („title“ und „formula“ werden benötigt).</div>`;
+        msgBox.innerHTML = `<div class="result-banner result-err">Keine gültige Formel erkannt (benötigt "title" und "formula").</div>`;
         return;
       }
 
@@ -4803,95 +4765,75 @@ Erlaubte formulaType-Werte: "mul" (var1 * var2), "div" (var1 / var2), "add" (var
       activeCalcTab = "ai-custom";
       renderSidebar();
       renderView();
-      const afterMsg = document.getElementById("aiFormulaMsg");
-      if (afterMsg) {
-        afterMsg.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) hinzugefügt!</div>`;
+      const afterBox = document.getElementById("aiFormulaMsg");
+      if (afterBox) {
+        afterBox.innerHTML = `<div class="result-banner result-ok">✅ ${added} Formel(n) hinzugefügt!</div>`;
       }
     }
 
     function runCustomFormulaCalc(cfId) {
-      const cf = customFormulas.find(f => f.id === cfId);
+      const cf = customFormulas.find(x => x.id === cfId);
       if (!cf) return;
       const v1 = parseFloat(document.getElementById("cfv1-" + cfId).value);
       const v2 = parseFloat(document.getElementById("cfv2-" + cfId).value);
+      const resBox = document.getElementById("cfres-" + cfId);
       if (isNaN(v1) || isNaN(v2)) return;
 
-      let res = 0;
+      let out = 0;
       if (cf.formulaType === "div") {
-        if (v2 === 0) return;
-        res = v1 / v2;
+        if (v2 === 0) {
+          resBox.innerHTML = `<div class="result-banner result-err">Division durch 0 nicht möglich.</div>`;
+          return;
+        }
+        out = v1 / v2;
       } else if (cf.formulaType === "add") {
-        res = v1 + v2;
+        out = v1 + v2;
       } else if (cf.formulaType === "sub") {
-        res = v1 - v2;
+        out = v1 - v2;
       } else {
-        res = v1 * v2;
+        out = v1 * v2;
       }
 
-      const box = document.getElementById("cfres-" + cfId);
-      box.innerHTML = `<div class="result-banner result-ok">Ergebnis: ${Number.isInteger(res) ? res : res.toFixed(3)}</div>`;
+      resBox.innerHTML = `<div class="result-banner result-ok">Ergebnis: <strong>${Number(out.toFixed(4))}</strong></div>`;
     }
 
     function deleteCustomFormula(cfId) {
-      if (!isAdmin()) return;
-      customFormulas = customFormulas.filter(f => f.id !== cfId);
+      if (!isAdmin()) return alert("Nur Admins dürfen Formeln löschen.");
+      customFormulas = customFormulas.filter(x => x.id !== cfId);
       saveCustomFormulas();
       renderSidebar();
       renderView();
     }
 
     function openAccessModal(subId) {
+      if (!isAdmin()) return;
       const sub = subjects.find(s => s.id === subId);
+      if (!sub) return;
       editingSubjectId = subId;
       tempSelectedUsers = new Set(sub.allowedUsers || []);
       renderView();
+      toggleUserGridDisabled();
     }
 
-    function renderAccessEditor() {
-      const sub = subjects.find(s => s.id === editingSubjectId);
-      if (!sub) return "";
-      return `
-        <div style="margin-top:16px; padding:16px; background:var(--bg-input); border-radius:12px; border:1px solid var(--border);">
-          <h4>Zugriff für „${sub.name}“ bearbeiten</h4>
-          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-weight:600; cursor:pointer;">
-            <input type="checkbox" id="accessAllCheckbox" ${sub.accessAll ? "checked" : ""} onchange="toggleAccessAllUsers(this.checked)">
-            Für ALLE Benutzer freischalten
-          </label>
-
-          <div id="specificUsersBox" style="display:${sub.accessAll ? 'none' : 'block'}; margin-top:12px;">
-            <div style="font-size:13px; color:var(--text-muted);">Wähle die berechtigten Benutzer aus:</div>
-            <div class="user-checkbox-grid">
-              ${users.map(u => `
-                <label class="user-check-label">
-                  <input type="checkbox" ${tempSelectedUsers.has(u.id) ? "checked" : ""} onchange="toggleUserInSubject(${u.id}, this.checked)">
-                  <span>${u.name} (${u.role})</span>
-                </label>
-              `).join("")}
-            </div>
-          </div>
-
-          <div style="margin-top:14px; display:flex; gap:8px;">
-            <button class="btn-primary" onclick="saveSubjectAccess()">Berechtigungen speichern</button>
-            <button class="btn-secondary" onclick="editingSubjectId=null; renderView();">Abbrechen</button>
-          </div>
-        </div>
-      `;
+    function toggleUserGridDisabled() {
+      const accessAll = document.getElementById("modalAccessAll")?.checked;
+      const grid = document.getElementById("modalUserGrid");
+      if (!grid) return;
+      grid.style.opacity = accessAll ? "0.45" : "1";
+      grid.style.pointerEvents = accessAll ? "none" : "auto";
     }
 
-    function toggleAccessAllUsers(checked) {
-      document.getElementById("specificUsersBox").style.display = checked ? "none" : "block";
-    }
-
-    function toggleUserInSubject(userId, checked) {
+    function toggleTempUser(userId, checked) {
       if (checked) tempSelectedUsers.add(userId);
       else tempSelectedUsers.delete(userId);
     }
 
     function saveSubjectAccess() {
+      if (!isAdmin()) return;
       const sub = subjects.find(s => s.id === editingSubjectId);
-      const allChecked = document.getElementById("accessAllCheckbox").checked;
-      sub.accessAll = allChecked;
-      sub.allowedUsers = allChecked ? [] : Array.from(tempSelectedUsers);
+      if (!sub) return;
+      sub.accessAll = document.getElementById("modalAccessAll").checked;
+      sub.allowedUsers = Array.from(tempSelectedUsers);
       editingSubjectId = null;
       saveSubjects();
       renderSidebar();
