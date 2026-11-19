@@ -515,10 +515,15 @@
       resize: vertical;
     }
 
-    .input-field, .select-field {
+    .input-field, .select-field, .textarea-field {
       width: 100%; padding: 10px 12px; border-radius: 10px;
       border: 1px solid var(--border); background: var(--bg-input);
       color: var(--text-main); margin-top: 6px; margin-bottom: 12px; font-size: 14px;
+    }
+    .textarea-field {
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.45;
     }
     .form-grid-2 {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
@@ -701,6 +706,17 @@
       display: flex; align-items: center; gap: 8px; padding: 8px 12px;
       background: var(--bg-input); border: 1px solid var(--border);
       border-radius: 8px; cursor: pointer; font-size: 14px;
+    }
+
+    .contact-msg-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .contact-msg-card.unread {
+      border-left: 4px solid var(--accent);
     }
 
     .modal-backdrop {
@@ -911,6 +927,13 @@
 
       <div>
         <div class="nav-section-label">System &amp; Verwaltung</div>
+        <button class="nav-item" onclick="navigate('contact', this)">
+          <span class="nav-item-left">✉️ Kontakt &amp; Support</span>
+          <span class="count-pill" id="sidebarUnreadContactCount" style="display:none;">0</span>
+        </button>
+        <button class="nav-item" onclick="navigate('imprint', this)">
+          <span class="nav-item-left">📄 Impressum</span>
+        </button>
         <button class="nav-item" onclick="navigate('settings', this)">
           <span class="nav-item-left">⚙️ Einstellungen &amp; Passwort</span>
         </button>
@@ -1053,7 +1076,9 @@
             friendships,
             chatMessages,
             customFormulas,
-            customFormulaFolders
+            customFormulaFolders,
+            imprintData,
+            contactMessages
           };
           const { error } = await sbClient
             .from("portal_state")
@@ -1121,6 +1146,14 @@
           customFormulaFolders = d.customFormulaFolders;
           localStorage.setItem("lmg_formula_folders_v1", JSON.stringify(customFormulaFolders));
         }
+        if (d.imprintData && typeof d.imprintData === "object") {
+          imprintData = { ...defaultImprintData, ...d.imprintData };
+          localStorage.setItem("lmg_imprint_v1", JSON.stringify(imprintData));
+        }
+        if (Array.isArray(d.contactMessages)) {
+          contactMessages = d.contactMessages;
+          localStorage.setItem("lmg_contact_msgs_v1", JSON.stringify(contactMessages));
+        }
 
         if (isAuthenticated && !isLoginScreenVisible) {
           renderSidebar();
@@ -1182,6 +1215,259 @@
       if (logoutBtn) logoutBtn.style.display = isAuthenticated ? "inline-flex" : "none";
     }
 
+    const defaultImprintData = {
+      operatorName: "Gerry – Lernen mit Gerry",
+      address: "Kierling / Klosterneuburg, Niederösterreich, Österreich",
+      email: "gerry@lernen-mit-gerry.at",
+      websiteRole: "Privates Lernportal für Übungsaufgaben, Formeln, Prüfungsvorbereitung und Lerngruppen-Austausch.",
+      disclaimer: "Alle Lerninhalte, Musterlösungen und Formeln wurden sorgfältig erstellt, erfolgen jedoch ohne Gewähr für Vollständigkeit, Fehlerfreiheit oder Prüfungsergebnisse.",
+      privacyNote: "Verarbeitung von Benutzerdaten und Nachrichten ausschließlich im Rahmen des geschlossenen Lernportals und der Lerngruppen-Synchronisation."
+    };
+
+    let imprintData = {
+      ...defaultImprintData,
+      ...(JSON.parse(localStorage.getItem("lmg_imprint_v1") || "null") || {})
+    };
+
+    function saveImprintData() {
+      localStorage.setItem("lmg_imprint_v1", JSON.stringify(imprintData));
+      queueCloudSync();
+    }
+
+    function adminSaveImprintFromForm() {
+      if (!isAdmin()) return alert("Nur Admins dürfen das Impressum bearbeiten.");
+      imprintData = {
+        operatorName: document.getElementById("adminImpOperator")?.value.trim() || defaultImprintData.operatorName,
+        address: document.getElementById("adminImpAddress")?.value.trim() || "",
+        email: document.getElementById("adminImpEmail")?.value.trim() || "",
+        websiteRole: document.getElementById("adminImpRole")?.value.trim() || "",
+        disclaimer: document.getElementById("adminImpDisclaimer")?.value.trim() || "",
+        privacyNote: document.getElementById("adminImpPrivacy")?.value.trim() || ""
+      };
+      saveImprintData();
+      const fb = document.getElementById("adminImprintSavedMsg");
+      if (fb) {
+        fb.innerHTML = `<div class="result-banner result-ok">✅ Impressum gespeichert und mit der Cloud synchronisiert!</div>`;
+      }
+    }
+
+    let contactMessages = JSON.parse(localStorage.getItem("lmg_contact_msgs_v1") || "[]");
+    function saveContactMessages() {
+      localStorage.setItem("lmg_contact_msgs_v1", JSON.stringify(contactMessages));
+      queueCloudSync();
+    }
+
+    function submitContactMessage() {
+      if (!isAuthenticated || !currentUser) return;
+      const category = document.getElementById("contactCategoryInput")?.value || "Frage / Hilfe";
+      const subjectName = document.getElementById("contactSubjectInput")?.value || "Allgemein";
+      const title = document.getElementById("contactTitleInput")?.value.trim() || "";
+      const body = document.getElementById("contactBodyInput")?.value.trim() || "";
+      const fb = document.getElementById("contactFormMsg");
+
+      if (!title || !body) {
+        if (fb) {
+          fb.innerHTML = `<div class="result-banner result-err">Bitte Betreff und Nachricht ausfüllen!</div>`;
+        }
+        return;
+      }
+
+      const now = new Date();
+      const timestamp = now.toLocaleString("de-AT", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+
+      contactMessages.unshift({
+        id: "msg-" + Date.now(),
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        senderRole: currentUser.role,
+        senderEmail: currentUser.email,
+        category,
+        subjectName,
+        title,
+        body,
+        timestamp,
+        read: false
+      });
+
+      saveContactMessages();
+      renderSidebar();
+      renderView();
+
+      const afterFb = document.getElementById("contactFormMsg");
+      if (afterFb) {
+        afterFb.innerHTML = `<div class="result-banner result-ok">✅ Deine Nachricht („${title}“) wurde an den Administrator gesendet!</div>`;
+      }
+    }
+
+    function markContactMessageRead(msgId) {
+      if (!isAdmin()) return;
+      const msg = contactMessages.find(m => m.id === msgId);
+      if (!msg) return;
+      msg.read = !msg.read;
+      saveContactMessages();
+      renderSidebar();
+      renderView();
+    }
+
+    function deleteContactMessage(msgId) {
+      if (!isAdmin()) return;
+      contactMessages = contactMessages.filter(m => m.id !== msgId);
+      saveContactMessages();
+      renderSidebar();
+      renderView();
+    }
+
+    function renderImprintView() {
+      return `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+            <div>
+              <h3 style="font-size:19px;">📄 Impressum</h3>
+              <p style="font-size:13px; color:var(--text-muted);">Anbieterkennzeichnung &amp; rechtliche Hinweise zum Lernportal.</p>
+            </div>
+            ${isAdmin() ? `
+              <button type="button" class="btn-secondary" onclick="navigate('admin')">✏️ Im Admin-Bereich bearbeiten</button>
+            ` : ""}
+          </div>
+
+          <div class="setting-row">
+            <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Betreiber / Projekt</div>
+            <div style="flex:1; font-weight:700; font-size:15px;">${imprintData.operatorName || "–"}</div>
+          </div>
+
+          <div class="setting-row">
+            <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Standort / Anschrift</div>
+            <div style="flex:1; font-size:14px; white-space:pre-line;">${imprintData.address || "–"}</div>
+          </div>
+
+          <div class="setting-row">
+            <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Kontakt-E-Mail</div>
+            <div style="flex:1; font-size:14px;">${imprintData.email ? `<code>${imprintData.email}</code>` : "–"}</div>
+          </div>
+
+          <div class="setting-row">
+            <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Zweck des Angebots</div>
+            <div style="flex:1; font-size:14px; line-height:1.5; white-space:pre-line;">${imprintData.websiteRole || "–"}</div>
+          </div>
+
+          <div class="setting-row">
+            <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Haftungsausschluss</div>
+            <div style="flex:1; font-size:13.5px; color:var(--text-muted); line-height:1.5; white-space:pre-line;">${imprintData.disclaimer || "–"}</div>
+          </div>
+
+          <div class="setting-row">
+            <div style="min-width:190px; font-weight:700; color:var(--text-muted); font-size:13px;">Datenschutzhinweis</div>
+            <div style="flex:1; font-size:13.5px; color:var(--text-muted); line-height:1.5; white-space:pre-line;">${imprintData.privacyNote || "–"}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderContactView() {
+      const ownMessages = contactMessages.filter(m => m.senderId === currentUser.id);
+      const unreadTotal = contactMessages.filter(m => !m.read).length;
+
+      return `
+        <div class="card">
+          <h3 style="font-size:19px; margin-bottom:4px;">✉️ Kontaktformular an den Administrator</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+            Als Schüler, Lehrer oder Lernender kannst du hier Fragen, Anliegen, Stoffwünsche oder Korrekturen direkt an den Administrator senden.
+          </p>
+
+          <div class="form-grid-2">
+            <div>
+              <label style="font-size:13px; font-weight:600;">Anliegen / Kategorie</label>
+              <select id="contactCategoryInput" class="select-field">
+                <option value="Frage / Hilfe">❓ Frage / Hilfe zum Stoff</option>
+                <option value="Lehrer-Anliegen">👩‍🏫 Lehrer-Anliegen / Prüfungshinweis</option>
+                <option value="Fehler / Korrektur">🛠️ Fehler oder Tippfehler melden</option>
+                <option value="Wunsch / Thema">💡 Neues Thema / Ordner vorschlagen</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:13px; font-weight:600;">Betroffenes Fach (optional)</label>
+              <select id="contactSubjectInput" class="select-field">
+                <option value="Allgemein">📚 Allgemein / Portal</option>
+                ${subjects.map(s => `<option value="${s.name}">${s.icon} ${s.name}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+
+          <label style="font-size:13px; font-weight:600;">Betreff *</label>
+          <input type="text" id="contactTitleInput" class="input-field" placeholder="z. B. Frage zur Kettenregel oder Hinweis zum FET-Test">
+
+          <label style="font-size:13px; font-weight:600;">Nachricht / Anliegen *</label>
+          <textarea id="contactBodyInput" class="textarea-field" placeholder="Beschreibe dein Anliegen oder deine Frage so genau wie möglich..."></textarea>
+
+          <button type="button" class="btn-primary" onclick="submitContactMessage()">📨 Nachricht an Administrator senden</button>
+          <div id="contactFormMsg"></div>
+        </div>
+
+        ${isAdmin() ? `
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+              <div>
+                <h3>📥 Eingegangene Nachrichten an den Administrator (${contactMessages.length})</h3>
+                <p style="font-size:13px; color:var(--text-muted);">
+                  Ungelesen: <strong>${unreadTotal}</strong> · Live synchronisiert.
+                </p>
+              </div>
+              <button type="button" class="btn-secondary" onclick="loadFromCloud(false)">🔄 Aktualisieren</button>
+            </div>
+
+            ${contactMessages.length === 0
+              ? `<p style="font-size:13.5px; color:var(--text-muted);">Aktuell sind noch keine Kontaktanfragen eingegangen.</p>`
+              : contactMessages.map(m => `
+                <div class="contact-msg-card ${!m.read ? 'unread' : ''}">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                    <div>
+                      <span class="count-pill">${m.category}</span>
+                      <span class="count-pill" style="margin-left:4px;">${m.subjectName}</span>
+                      ${!m.read ? `<span class="days-badge" style="margin-left:6px; padding:2px 8px; font-size:11px;">Neu</span>` : `<span class="count-pill" style="margin-left:6px;">Gelesen</span>`}
+                      <div style="font-weight:800; font-size:15px; margin-top:6px;">${m.title}</div>
+                      <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                        Von <strong>${m.senderName}</strong> <span class="role-badge">${m.senderRole}</span> · ${m.timestamp}
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                      <button type="button" class="btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="markContactMessageRead('${m.id}')">
+                        ${m.read ? "Als neu markieren" : "Als gelesen markieren"}
+                      </button>
+                      <button type="button" class="btn-danger" onclick="deleteContactMessage('${m.id}')">Löschen</button>
+                    </div>
+                  </div>
+                  <div style="font-size:14px; line-height:1.5; white-space:pre-line; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 12px;">${m.body}</div>
+                </div>
+              `).join("")
+            }
+          </div>
+        ` : `
+          <div class="card">
+            <h4 style="margin-bottom:10px;">📤 Deine gesendeten Anfragen (${ownMessages.length})</h4>
+            ${ownMessages.length === 0
+              ? `<p style="font-size:13px; color:var(--text-muted);">Du hast bisher noch keine Nachricht über das Kontaktformular gesendet.</p>`
+              : ownMessages.map(m => `
+                <div class="contact-msg-card">
+                  <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:12px; color:var(--text-muted);">
+                    <span><strong>${m.category}</strong> · ${m.subjectName}</span>
+                    <span>${m.timestamp}</span>
+                  </div>
+                  <div style="font-weight:700; font-size:14.5px; margin-top:4px;">${m.title}</div>
+                  <div style="font-size:13.5px; margin-top:4px; white-space:pre-line;">${m.body}</div>
+                </div>
+              `).join("")
+            }
+          </div>
+        `}
+      `;
+    }
+
     let customRoles = JSON.parse(localStorage.getItem("lmg_custom_roles_v1")) || [];
     function saveCustomRoles() {
       localStorage.setItem("lmg_custom_roles_v1", JSON.stringify(customRoles));
@@ -1191,10 +1477,11 @@
     function getAllAvailableRoles() {
       const base = [
         { name: "Schüler", isAdminRole: false, builtIn: true },
+        { name: "Lehrer", isAdminRole: false, builtIn: true },
         { name: "Admin", isAdminRole: true, builtIn: true }
       ];
       const extras = customRoles
-        .filter(r => r && r.name && !["schüler", "admin"].includes(String(r.name).trim().toLowerCase()))
+        .filter(r => r && r.name && !["schüler", "lehrer", "admin"].includes(String(r.name).trim().toLowerCase()))
         .map(r => ({
           name: String(r.name).trim(),
           isAdminRole: Boolean(r.isAdminRole),
@@ -2189,8 +2476,8 @@
         return;
       }
 
-      if (["schüler", "admin"].includes(cleanName.toLowerCase())) {
-        alert("„Schüler“ und „Admin“ sind bereits als Standardrollen vorhanden.");
+      if (["schüler", "lehrer", "admin"].includes(cleanName.toLowerCase())) {
+        alert("„Schüler“, „Lehrer“ und „Admin“ sind bereits als Standardrollen vorhanden.");
         return;
       }
 
@@ -2216,7 +2503,7 @@
       const cleanName = updated.trim();
       if (!cleanName) return;
 
-      if (["schüler", "admin"].includes(cleanName.toLowerCase())) {
+      if (["schüler", "lehrer", "admin"].includes(cleanName.toLowerCase())) {
         alert("Dieser Name ist für Standardrollen reserviert.");
         return;
       }
@@ -2381,6 +2668,17 @@
       if (friendBadge) {
         friendBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
         friendBadge.innerText = pendingCount;
+      }
+
+      const unreadContactCount = contactMessages.filter(m => !m.read).length;
+      const contactBadge = document.getElementById("sidebarUnreadContactCount");
+      if (contactBadge) {
+        if (isAdmin() && unreadContactCount > 0) {
+          contactBadge.style.display = "inline-block";
+          contactBadge.innerText = unreadContactCount;
+        } else {
+          contactBadge.style.display = "none";
+        }
       }
 
       updateTopStatusBar();
@@ -3323,6 +3621,14 @@
           </div>
         `;
       }
+      else if (currentView === "contact") {
+        heading.innerText = "✉️ Kontakt & Support";
+        container.innerHTML = renderContactView();
+      }
+      else if (currentView === "imprint") {
+        heading.innerText = "📄 Impressum";
+        container.innerHTML = renderImprintView();
+      }
       else if (currentView === "derivative-trainer") {
         heading.innerText = "📈 Ableitungstrainer";
         container.innerHTML = `
@@ -3586,6 +3892,42 @@
         const availableRoles = getAllAvailableRoles();
 
         container.innerHTML = `
+          <div class="card">
+            <h3 style="margin-bottom:4px;">📄 Impressum bearbeiten (nur Admin)</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+              Fülle hier dein Impressum aus – es wird sofort im Menüpunkt „Impressum“ angezeigt und synchronisiert.
+            </p>
+
+            <div class="form-grid-2">
+              <div>
+                <label style="font-size:13px; font-weight:600;">Betreiber / Name</label>
+                <input type="text" id="adminImpOperator" class="input-field" value="${(imprintData.operatorName || '').replace(/"/g, '&quot;')}">
+              </div>
+              <div>
+                <label style="font-size:13px; font-weight:600;">Kontakt-E-Mail</label>
+                <input type="text" id="adminImpEmail" class="input-field" value="${(imprintData.email || '').replace(/"/g, '&quot;')}">
+              </div>
+            </div>
+
+            <label style="font-size:13px; font-weight:600;">Anschrift / Ort</label>
+            <input type="text" id="adminImpAddress" class="input-field" value="${(imprintData.address || '').replace(/"/g, '&quot;')}">
+
+            <label style="font-size:13px; font-weight:600;">Zweck / Beschreibung des Portals</label>
+            <textarea id="adminImpRole" class="textarea-field">${imprintData.websiteRole || ''}</textarea>
+
+            <label style="font-size:13px; font-weight:600;">Haftungsausschluss</label>
+            <textarea id="adminImpDisclaimer" class="textarea-field">${imprintData.disclaimer || ''}</textarea>
+
+            <label style="font-size:13px; font-weight:600;">Datenschutzhinweis</label>
+            <textarea id="adminImpPrivacy" class="textarea-field">${imprintData.privacyNote || ''}</textarea>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button type="button" class="btn-primary" onclick="adminSaveImprintFromForm()">💾 Impressum speichern</button>
+              <button type="button" class="btn-secondary" onclick="navigate('imprint')">👁️ Impressum-Ansicht öffnen</button>
+            </div>
+            <div id="adminImprintSavedMsg"></div>
+          </div>
+
           <div class="card">
             <h3 style="margin-bottom:4px;">🏷️ Eigene Rollen hinzufügen &amp; benennen</h3>
             <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
